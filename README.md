@@ -1,7 +1,7 @@
 #Stino
+#####Warning: This version is not finished, and do not download this version.
 #####A Sublime Text 2 Plugin for Arduino
-version 1.1
-
+version 1.2 Alpha
 Copyright (c) 2012 Robot-Will(robot.will.me (at) gmail.com). 
 
 ## To all users
