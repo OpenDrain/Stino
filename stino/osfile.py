@@ -67,11 +67,11 @@ def listDir(path, with_dirs = True, with_files = True):
 			if os.path.isdir(cur_file_path):
 				if with_dirs:
 					if isDirAccess(cur_file_path):
-						file_list.append(cur_file_path)
+						file_list.append(cur_file)
 			else:
 				if with_files:
 					if isFileAccess(cur_file_path):
-						file_list.append(cur_file_path)
+						file_list.append(cur_file)
 	return file_list
 
 def readFileText(file_path):
@@ -84,10 +84,15 @@ def readFileText(file_path):
 		for line in lines:
 			line = utils.convertAsciiToUtf8(line)
 			text += line
-			text += '\n'
 	return text
 
 def readFileLines(file_path):
 	text = readFileText(file_path)
 	lines = utils.convertTextToLines(text)
 	return lines
+
+def writeFile(file_path, text, encoding = 'utf-8'):
+	text = text.encode(encoding)
+	f = open(file_path, 'w')
+	f.write(text)
+	f.close()
