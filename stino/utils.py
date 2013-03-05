@@ -43,3 +43,14 @@ def splitTextToConvertToUtf8(txt, encoding):
 def convertTextToLines(txt):
 	lines = txt.split('\n')
 	return lines
+
+def getKeyValue(line):
+	line = line.strip()
+	if '=' in line:
+		index = line.index('=')
+		key = line[:index].strip()
+		value = line[(index+1):].strip()
+	else:
+		key = ''
+		value = ''
+	return (key, value)
