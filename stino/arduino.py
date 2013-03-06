@@ -7,6 +7,10 @@ from stino import utils
 from stino import const
 from stino import osfile
 
+def genKey(info, base_info):
+	key = info + const.info_sep + base_info
+	return key
+
 def getRealPath(path):
 	if const.sys_platform == 'osx':
 		path = os.path.join(path, 'Contents/Resources/JAVA')
@@ -96,10 +100,19 @@ def parseBoardHeader(boards_file_header_block):
 					board_type_caption_dict[board_type] = board_type_caption
 	return (board_type_list, board_type_caption_dict)
 				
-def parseBoardBody150(boards_file_body_block):
-	print 'board150'
+def parseBoardFile150(platform, boards_file_path):
 	board_list = []
-	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name')
+	board_file_dict = {}
+	board_type_list_dict = {}
+	board_item_list_dict = {}
+
+	board_type = 'menu.cpu'
+	board_type_list = [board_type]
+	type_key = genKey(board_type, platform)
+	type_caption_dict = {type_key:'Processor'}
+
+	lines = osfile.readFileLines(boards_file_path)
+	board_info_block_list = utils.splitToBlocks(lines, sep = '.name')
 	for board_info_block in board_info_block_list:
 		cpu = ''
 		for line in board_info_block:
@@ -110,38 +123,75 @@ def parseBoardBody150(boards_file_body_block):
 			if '.container' in line:
 				(key, board) = utils.getKeyValue(line)
 				break
+
+		board_key = genKey(board, platform)
+		key = genKey(board_type, board_key)
+
 		if not board in board_list:
 			board_list.append(board)
-		else:
-			pass
-	return board_list
 
-def parseBoardBody(boards_file_body_block, board_type_list):
+			board_file_dict[board_key] = boards_file_path
+			if cpu:
+				board_type_list_dict[board_key] = board_type_list
+				board_item_list_dict[key] = [cpu]
+		else:
+			if cpu and (not cpu in board_item_list_dict[key]):
+				board_item_list_dict[key].append(cpu)
+	return (board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict)
+
+def parseBoardFile(platform, boards_file_path):
 	board_list = []
+	board_file_dict = {}
+	board_type_list_dict = {}
+	board_item_list_dict = {}
+	type_caption_dict = {}
+
+	(boards_file_header_block, boards_file_body_block) = splitBoardsFile(boards_file_path)
+	(board_type_list, board_type_caption_dict) = parseBoardHeader(boards_file_header_block)
+
+	for board_type in board_type_caption_dict:
+		type_key = genKey(board_type, platform)
+		type_caption_dict[type_key] = board_type_caption_dict[board_type]
+
 	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name')
 	for board_info_block in board_info_block_list:
 		board_name_line = board_info_block[0]
 		(key, board) = utils.getKeyValue(board_name_line)
 		if not board in board_list:
 			board_list.append(board)
-	return board_list
+
+			board_key = genKey(board, platform)
+			board_file_dict[board_key] = boards_file_path
+			board_type_list_dict[board_key] = []
+
+			for board_type in board_type_list:
+				item_list = []
+				board_type_info_block = utils.getTypeInfoBlock(board_info_block, board_type)
+				item_blocks = utils.splitToBlocks(board_type_info_block, sep = '.name', key_length = 4)
+				for item_block in item_blocks:
+					item_name_line = item_block[0]
+					(key, item) = utils.getKeyValue(item_name_line)
+					if not item in item_list:
+						item_list.append(item)
+				if item_list:
+					board_type_list_dict[board_key].append(board_type)
+					key = genKey(board_type, board_key)
+					board_item_list_dict[key] = item_list
+	return (board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict)
 
 def parseBoardInfo(platform, core_root):
 	board_list = []
 	boards_file_path = os.path.join(core_root, 'boards.txt')
 	if os.path.isfile(boards_file_path):
-		(boards_file_header_block, boards_file_body_block) = splitBoardsFile(boards_file_path)
 		if isBoard150(boards_file_path):
-			board_type_list = ['menu.cpu']
-			board_type_caption_dict = {'menu.cpu':'Processor'}
-			board_list = parseBoardBody150(boards_file_body_block)
+			(board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict) = parseBoardFile150(platform, boards_file_path)
 		else:
-			(board_type_list, board_type_caption_dict) = parseBoardHeader(boards_file_header_block)
-			board_list = parseBoardBody(boards_file_body_block, board_type_list)
-	return board_list
+			(board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict) = parseBoardFile(platform, boards_file_path)
+	return (board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict)
 
-def parseProgrammerInfo(core_root):
+def parseProgrammerInfo(platform, core_root):
 	programmer_list = []
+	programmer_file_dict = {}
 	programmers_file_path = os.path.join(core_root, 'programmers.txt')
 	if os.path.isfile(programmers_file_path):
 		lines = osfile.readFileLines(programmers_file_path)
@@ -149,8 +199,12 @@ def parseProgrammerInfo(core_root):
 		for programmer_info_block in programmer_info_block_list:
 			programmer_name_line = programmer_info_block[0]
 			(key, programmer) = utils.getKeyValue(programmer_name_line)
-			programmer_list.append(programmer)
-	return programmer_list
+			if not programmer in programmer_list:
+				programmer_list.append(programmer)
+
+				programmer_key = genKey(programmer, platform)
+				programmer_file_dict[programmer_key] = programmers_file_path
+	return (programmer_list, programmer_file_dict)
 
 class Arduino:
 	def __init__(self):
@@ -210,13 +264,44 @@ class Arduino:
 				self.platform_list.remove(platform)
 		return self.platform_list
 
-	def genPlatformBoardList(self):
+	def genPlatformBoardLists(self):
+		self.platform_board_lists_dict = {}
+		self.board_file_dict = {}
+		self.board_type_list_dict = {}
+		self.board_item_list_dict = {}
+		self.type_caption_dict = {}
+
 		platform_list = self.genPlatformList()
 		for platform in platform_list:
+			self.platform_board_lists_dict[platform] = []
+			self.board_type_list_dict[platform] = []
 			core_root_list = self.getCoreRootList(platform)
 			for core_root in core_root_list:
-				board_list = parseBoardInfo(platform, core_root)
-				print board_list
+				(board_list, board_file_dict, board_type_list_dict, board_item_list_dict, type_caption_dict) = parseBoardInfo(platform, core_root)
+				if board_list:
+					self.platform_board_lists_dict[platform].append(board_list)
+					self.board_file_dict = dict(self.board_file_dict, **board_file_dict)
+					self.board_type_list_dict = dict(self.board_type_list_dict, **board_type_list_dict)
+					self.board_item_list_dict = dict(self.board_item_list_dict, **board_item_list_dict)
+					self.type_caption_dict = dict(self.type_caption_dict, **type_caption_dict)
+		print self.platform_board_lists_dict
+		print self.board_file_dict
+		print self.board_type_list_dict
+		print self.board_item_list_dict
+		print self.type_caption_dict
+
+	def genPlatformProgrammerLists(self):
+		self.platform_programmer_lists_dict = {}
+		self.programmer_file_dict = {}
+		platform_list = self.getPlatformList()
+		for platform in platform_list:
+			self.platform_programmer_lists_dict[platform] = []
+			core_root_list = self.getCoreRootList(platform)
+			for core_root in core_root_list:
+				(programmer_list, programmer_file_dict) = parseProgrammerInfo(platform, core_root)
+				if programmer_list:
+					self.platform_programmer_lists_dict[platform].append(programmer_list)
+					self.programmer_file_dict = dict(self.programmer_file_dict, **programmer_file_dict)
 
 	def setArduinoRoot(self, arduino_root):
 		const.settings.set('arduino_root', arduino_root)
@@ -262,6 +347,9 @@ class Arduino:
 				os.mkdir(path)
 		return sketchbook_root
 
+	def getPlatformList(self):
+		return self.platform_list
+
 	def getCoreRootList(self, platform):
 		core_root_list = []
 		if platform in self.platform_list:
@@ -273,3 +361,52 @@ class Arduino:
 		if platform in self.platform_list:
 			cores_path = self.platform_cores_path_dict[platform]
 		return cores_path
+
+	def getBoardLists(self, platform):
+		board_lists = []
+		if platform in self.platform_list:
+			board_lists = self.platform_board_lists_dict[platform]
+		return board_lists
+
+	def getBoardFile(self, platform, board):
+		file_path = ''
+		key = genKey(board, platform)
+		if key in self.board_file_dict:
+			file_path = self.board_file_dict[key]
+		return file_path
+
+	def getBoardTypeList(self, platform, board):
+		type_list = []
+		key = genKey(board, platform)
+		if key in self.board_type_list_dict:
+			type_list = self.board_type_list_dict[key]
+		return type_list
+
+	def getBoardItemList(self, platform, board, board_type):
+		item_list = []
+		board_key = genKey(board, platform)
+		type_key = genKey(board_type, board_key)
+		if type_key in self.board_item_list_dict:
+			item_list = self.board_item_list_dict[type_key]
+		return item_list
+
+	def getPlatformTypeCaption(self, platform, board_type):
+		caption = ''
+		key = genKey(board_type, platform)
+		if key in self.type_caption_dict:
+			caption = self.type_caption_dict[key]
+		return caption
+
+	def getProgrammerLists(self, platform):
+		programmer_lists = []
+		if platform in self.platform_list:
+			programmer_lists = self.platform_programmer_lists_dict[platform]
+		return programmer_lists
+
+	def getProgrammerFile(self, platform, programmer):
+		file_path = ''
+		key = genKey(programmer, platform)
+		if key in self.programmer_file_dict:
+			file_path = self.programmer_file_dict[programmer]
+		return file_path
+
