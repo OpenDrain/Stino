@@ -13,6 +13,10 @@ from stino import stpanel
 if const.sys_platform == 'windows':
 	import _winreg
 
+def getBaudrateList():
+	baudrate_list = ['300', '1200', '2400', '4800', '9600', '14400', '19200', '28800', '38400', '57600', '115200']
+	return baudrate_list
+
 def genSerialPortList():
 	serial_port_list = []
 	has_ports = False

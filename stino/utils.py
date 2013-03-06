@@ -54,3 +54,18 @@ def getKeyValue(line):
 		key = ''
 		value = ''
 	return (key, value)
+
+def splitToBlocks(lines, sep = '.name'):
+	block_list = []
+	block = []
+	for line in lines:
+		line = line.strip()
+		if line and (not '#' in line):
+			if sep in line:
+				block_list.append(block)
+				block = [line]
+			else:
+				block.append(line)
+	block_list.append(block)
+	block_list.pop(0)
+	return block_list
