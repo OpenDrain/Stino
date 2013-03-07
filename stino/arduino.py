@@ -206,6 +206,54 @@ def parseProgrammerInfo(platform, core_root):
 				programmer_file_dict[programmer_key] = programmers_file_path
 	return (programmer_list, programmer_file_dict)
 
+def isLibraryFolder(path):
+	state = False
+	header_ext_list = ['.h', '.hpp']
+	file_list = osfile.listDir(path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in header_ext_list:
+			state = True
+			break
+	return state
+
+def parseLibraryInfo(platform, root):
+	library_list = []
+	library_path_dict = {}
+	libraries_path = os.path.join(root, 'libraries')
+	dir_list = osfile.listDir(libraries_path, with_files = False)
+	for cur_dir in dir_list:
+		cur_dir_path = os.path.join(libraries_path, cur_dir)
+		if isLibraryFolder(cur_dir_path):
+			library_list.append(cur_dir)
+			key = genKey(cur_dir, platform)
+			library_path_dict[key] = cur_dir_path
+	return (library_list, library_path_dict)
+
+def parseExampleInfo(platform, root):
+	example_list = []
+	example_path_dict = {}
+	examples_path = os.path.join(root, 'examples')
+	dir_list = osfile.listDir(examples_path, with_files = False)
+	for cur_dir in dir_list:
+		example_list.append(cur_dir)
+		key = genKey(cur_dir, platform)
+		cur_dir_path = os.path.join(examples_path, cur_dir)
+		example_path_dict[key] = cur_dir_path
+	return (example_list, example_path_dict)
+
+def parseLibraryExampleInfo(platform, library_path_list):
+	example_list = []
+	example_path_dict = {}
+	for library_path in library_path_list:
+		examples_path = os.path.join(library_path, 'examples')
+		if os.path.isdir(examples_path):
+			example_name = os.path.split(library_path)[1]
+			example_list.append(example_name)
+			key = genKey(example_name, platform)
+			example_path_dict[key] = examples_path
+	return (example_list, example_path_dict)
+
 class Arduino:
 	def __init__(self):
 		pass
@@ -284,11 +332,6 @@ class Arduino:
 					self.board_type_list_dict = dict(self.board_type_list_dict, **board_type_list_dict)
 					self.board_item_list_dict = dict(self.board_item_list_dict, **board_item_list_dict)
 					self.type_caption_dict = dict(self.type_caption_dict, **type_caption_dict)
-		print self.platform_board_lists_dict
-		print self.board_file_dict
-		print self.board_type_list_dict
-		print self.board_item_list_dict
-		print self.type_caption_dict
 
 	def genPlatformProgrammerLists(self):
 		self.platform_programmer_lists_dict = {}
@@ -302,6 +345,46 @@ class Arduino:
 				if programmer_list:
 					self.platform_programmer_lists_dict[platform].append(programmer_list)
 					self.programmer_file_dict = dict(self.programmer_file_dict, **programmer_file_dict)
+
+	def genPlatformLibraryLists(self):
+		self.platform_library_lists_dict = {}
+		self.library_path_dict = {}
+
+		arduino_root = self.getArduinoRoot()
+		sketchbook_root = self.getSketchbookRoot()
+
+		platform_list = self.getPlatformList()
+		for platform in platform_list:
+			self.platform_library_lists_dict[platform] = []
+			core_root_list = self.getCoreRootList(platform)
+			root_list = [arduino_root, sketchbook_root]
+			root_list += core_root_list
+			for root in root_list:
+				(library_list, library_path_dict) = parseLibraryInfo(platform, root)
+				if library_list:
+					self.platform_library_lists_dict[platform].append(library_list)
+					self.library_path_dict = dict(self.library_path_dict, **library_path_dict)
+
+	def genPlatformExampleLists(self):
+		self.platform_example_lists_dict = {}
+		self.example_path_dict = {}
+
+		arduino_root = self.getArduinoRoot()
+		platform_list = self.getPlatformList()
+		for platform in platform_list:
+			self.platform_example_lists_dict[platform] = []
+			(example_list, example_path_dict) = parseExampleInfo(platform, arduino_root)
+			if example_list:
+				self.platform_example_lists_dict[platform].append(example_list)
+				self.example_path_dict = dict(self.example_path_dict, **example_path_dict)
+			
+			library_lists = self.getLibraryLists(platform)
+			for library_list in library_lists:
+				library_path_list = [self.getLibraryPath(platform, library) for library in library_list]
+				(example_list, example_path_dict) = parseLibraryExampleInfo(platform, library_path_list)
+				if example_list:
+					self.platform_example_lists_dict[platform].append(example_list)
+					self.example_path_dict = dict(self.example_path_dict, **example_path_dict)
 
 	def setArduinoRoot(self, arduino_root):
 		const.settings.set('arduino_root', arduino_root)
@@ -409,4 +492,17 @@ class Arduino:
 		if key in self.programmer_file_dict:
 			file_path = self.programmer_file_dict[programmer]
 		return file_path
+
+	def getLibraryLists(self, platform):
+		library_lists = []
+		if platform in self.platform_list:
+			library_lists = self.platform_library_lists_dict[platform]
+		return library_lists
+
+	def getLibraryPath(self, platform, library):
+		path = ''
+		key = genKey(library, platform)
+		if key in self.library_path_dict:
+			path = self.library_path_dict[key]
+		return path
 
