@@ -27,6 +27,52 @@ def isArduinoRoot(path):
 			state = True
 	return state
 
+def convertTextToVersion(version_text):
+	version = 0
+	if not '.' in version_text:
+		version = int(version_text)
+	else:
+		number_list = version_text.split('.')
+		power = 0
+		for number in number_list:
+			for n in number:
+				if not (n in '0123456789'):
+					index = number.index(n)
+					number = number[:index]
+					break
+			number = int(number)
+			version += number * (10 ** power)
+			power -= 1
+		version *= 100
+	return int(version)
+
+def parseVersionInfo(arduino_root):
+	version = 0
+	version_text = 'unknown'
+	lib_path = os.path.join(arduino_root, 'lib')
+	version_file_path = os.path.join(lib_path, 'version.txt')
+	if os.path.isfile(version_file_path):
+		lines = osfile.readFileLines(version_file_path)
+		for line in lines:
+			line = line.strip()
+			if line:
+				version_text = line
+				break
+	if version_text != 'unknown':
+		version = convertTextToVersion(version_text)
+	return (version, version_text)
+
+def isSketchFolder(path):
+	state = False
+	src_ext_list = ['.ino', '.pde', '.c', '.cc', '.cpp', '.cxx']
+	file_list = osfile.listDir(path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in src_ext_list:
+			state = True
+			break
+	return state
+
 def isCoreRoot(path):
 	state = False
 	if os.path.isdir(path):
@@ -256,7 +302,41 @@ def parseLibraryExampleInfo(platform, library_path_list):
 
 class Arduino:
 	def __init__(self):
-		pass
+		self.sketch_list = []
+		self.sketch_path_dict = {}
+		self.platform_list = []
+		self.platform_core_root_list_dict = {}
+		self.platform_cores_path_dict = {}
+		self.platform_board_lists_dict = {}
+		self.board_file_dict = {}
+		self.board_type_list_dict = {}
+		self.board_item_list_dict = {}
+		self.type_caption_dict = {}
+		self.platform_programmer_lists_dict = {}
+		self.programmer_file_dict = {}
+		self.platform_library_lists_dict = {}
+		self.library_path_dict = {}
+		self.platform_example_lists_dict = {}
+		self.example_path_dict = {}
+		self.version = 0
+		self.version_text = 'unknown'
+
+		self.update()
+
+	def update(self):
+		self.sketchbookUpdate()
+		if self.isReady():
+			self.boardUpdate()
+
+	def sketchbookUpdate(self):
+		self.genSketchList()
+
+	def boardUpdate(self):
+		self.genVersion()
+		self.genPlatformBoardLists()
+		self.genPlatformProgrammerLists()
+		self.genPlatformLibraryLists()
+		self.genPlatformExampleLists()
 
 	def isReady(self):
 		state = False
@@ -264,6 +344,21 @@ class Arduino:
 		if arduino_root:
 			state = True
 		return state
+
+	def genSketchList(self):
+		self.sketch_list = []
+		self.sketch_path_dict = {}
+		sketchbook_root = self.getSketchbookRoot()
+		dir_list = osfile.listDir(sketchbook_root, with_files = False)
+		for cur_dir in dir_list:
+			cur_dir_path = os.path.join(sketchbook_root, cur_dir)
+			if isSketchFolder(cur_dir_path):
+				self.sketch_list.append(cur_dir)
+				self.sketch_path_dict[cur_dir] = cur_dir_path
+
+	def genVersion(self):
+		arduino_root = self.getArduinoRoot()
+		(self.version, self.version_text) = parseVersionInfo(arduino_root)
 
 	def genCoreRootList(self):
 		core_root_list = []
@@ -430,6 +525,15 @@ class Arduino:
 				os.mkdir(path)
 		return sketchbook_root
 
+	def getSketchList(self):
+		return self.sketch_list
+
+	def getSketchPath(self, sketch):
+		path = ''
+		if sketch in self.sketch_path_dict:
+			path = self.sketch_path_dict[sketch]
+		return path
+
 	def getPlatformList(self):
 		return self.platform_list
 
@@ -506,3 +610,21 @@ class Arduino:
 			path = self.library_path_dict[key]
 		return path
 
+	def getExampleLists(self, platform):
+		example_lists = []
+		if platform in self.platform_list:
+			example_lists = self.platform_example_lists_dict[platform]
+		return example_lists
+
+	def getExamplePath(self, platform, example):
+		path = ''
+		key = genKey(example, platform)
+		if key in self.example_path_dict:
+			path = self.example_path_dict[key]
+		return key
+
+	def getVersion(self):
+		return self.version
+
+	def getVersionText(self):
+		return self.version_text
