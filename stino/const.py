@@ -44,5 +44,3 @@ script_root = os.path.join(plugin_root, 'stino')
 template_root = os.path.join(plugin_root, 'template')
 language_root = os.path.join(plugin_root, 'language')
 compilation_script_root = os.path.join(plugin_root, 'compilation')
-
-info_sep = '$@@$'

@@ -23,8 +23,8 @@
 				"id": "serial_monitor",
 				"children":
 				[
-					{"caption": "%(Start)s", "command": "start_serial_monitor"},
-					{"caption": "Baudrate->"}
+					{"caption": "Baudrate->"},
+					{"caption": "%(Start)s", "command": "start_serial_monitor"}
 				]
 			},
 			{"caption": "-"},
@@ -45,7 +45,7 @@
 						"id": "show_verbose_output",
 						"children":
 						[
-							{"caption": "%(compilation)s", "command": "toggle_verbose_compilation", "checkbox": true},
+							{"caption": "%(Compilation)s", "command": "toggle_verbose_compilation", "checkbox": true},
 							{"caption": "%(Upload)s", "command": "toggle_verbose_upload", "checkbox": true}
 						]
 					},

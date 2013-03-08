@@ -71,7 +71,8 @@ class Language:
 		for cur_dir in root_list:
 			file_list = osfile.listDir(cur_dir, with_dirs = False)
 			for cur_file in file_list:
-				if ('menu' in cur_file and not 'sublime' in cur_file) or (os.path.splitext(cur_file)[1] == '.py'):
+				if ('menu_' in cur_file and not 'sublime' in cur_file) \
+					or (os.path.splitext(cur_file)[1] == '.py'):
 					cur_file_path = os.path.join(cur_dir, cur_file)
 					text = osfile.readFileText(cur_file_path)
 					key_list = re.findall(pattern_text, text)

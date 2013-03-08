@@ -10,8 +10,10 @@ import osfile
 import language
 import smonitor
 import arduino
+import stmenu
 
 log_panel = stpanel.STPanel()
 serial_listener = smonitor.SerialPortListener()
 cur_language = language.Language()
 arduino_info = arduino.Arduino()
+cur_menu = stmenu.STMenu(cur_language, arduino_info)

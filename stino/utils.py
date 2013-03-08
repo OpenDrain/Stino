@@ -1,13 +1,23 @@
 #-*- coding: utf-8 -*-
 # stino/utils.py
 
+info_sep = '$@@$'
+
+def genKey(info, base_info):
+	key = info + info_sep + base_info
+	return key
+
+def getInfoFromKey(key):
+	info_list = key.split(info_sep)
+	return info_list
+
 def convertAsciiToUtf8(txt):
 	if not isinstance(txt, unicode):
 		try:
 			txt = txt.decode('utf-8')
 		except UnicodeDecodeError:
-			import chardet
-			detector = chardet.universaldetector()
+			from chardet import universaldetector
+			detector = universaldetector.UniversalDetector()
 			detector.feed(txt)
 			detector.close()
 			result = detector.result
@@ -55,13 +65,24 @@ def getKeyValue(line):
 		value = ''
 	return (key, value)
 
-def splitToBlocks(lines, sep = '.name'):
+def splitToBlocks(lines, sep = '.name', key_length = 0):
 	block_list = []
 	block = []
 	for line in lines:
 		line = line.strip()
 		if line and (not '#' in line):
-			if sep in line:
+			sep_condtion = sep in line
+			length_condition = False
+			if key_length > 0:
+				if '=' in line:
+					(key, value) = getKeyValue(line)
+					key_list = key.split('.')
+					length = len(key_list)
+					if length == key_length:
+						length_condition = True
+
+			is_new_block = sep_condtion or length_condition
+			if is_new_block:
 				block_list.append(block)
 				block = [line]
 			else:
@@ -69,3 +90,16 @@ def splitToBlocks(lines, sep = '.name'):
 	block_list.append(block)
 	block_list.pop(0)
 	return block_list
+
+def getTypeInfoBlock(board_info_block, board_type):
+	info_block = []
+	for line in board_info_block:
+		if board_type in line:
+			info_block.append(line)
+	return info_block
+
+def simplifyLists(lists):
+	simple_list = []
+	for cur_list in lists:
+		simple_list += cur_list
+	return simple_list
