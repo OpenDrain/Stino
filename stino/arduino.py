@@ -617,7 +617,7 @@ class Arduino:
 		key = utils.genKey(example, platform)
 		if key in self.example_path_dict:
 			path = self.example_path_dict[key]
-		return key
+		return path
 
 	def getVersion(self):
 		return self.version

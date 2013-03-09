@@ -7,6 +7,11 @@ import re
 from stino import const
 from stino import osfile
 
+abv_language_dict = {}
+abv_language_dict['zh_cn'] = 'Chinese Simplified'
+abv_language_dict['zh_tw'] = 'Chinese Traditional'
+abv_language_dict['en'] = 'English'
+
 def parseLanguageFromFile(file_path):
 	language = ''
 	language_text = ''
@@ -26,6 +31,9 @@ class Language:
 		self.genDefaultTransDict()
 		self.genDefaultLanguageFile()
 		self.genTransDict()
+
+	def update(self):
+		pass
 
 	def genLanguageList(self):
 		self.language_list = []
@@ -50,11 +58,15 @@ class Language:
 	def setDefaultLanguage(self):
 		language = const.settings.get('language')
 		if not language:
-			language = const.sys_language
+			language_abv = const.sys_language
+			if language_abv in abv_language_dict:
+				language = abv_language_dict[language_abv]
+			else:
+				language_abv = language_abv.split('_')[0].strip()
+				if language_abv in abv_language_dict:
+					language = abv_language_dict[language_abv]
 		if not language in self.language_list:
-			language = language.split('_')[0].strip()
-			if not language in self.language_list:
-				language = 'en'
+			language = 'English'
 		const.settings.set('language', language)
 		const.save_settings()
 

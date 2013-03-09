@@ -30,6 +30,9 @@ class STMenu:
 		self.genFullMenuText()
 		self.writeMainMenuFile()
 
+	def languageUpdate(self):
+		pass
+
 	def genOriginalMenuText(self):
 		show_arduino_menu = const.settings.get('show_arduino_menu')
 		show_serial_monitor_menu = const.settings.get('show_serial_monitor_menu')
@@ -55,7 +58,7 @@ class STMenu:
 		self.original_menu_text = menu_text
 
 	def genSubMenuBlock(self, menu_caption, item_lists, command, menu_base = None, checkbox = False):
-		submenu_text = '{"caption": "%s", "command": "not_enable"},' % menu_caption
+		submenu_text = '{"caption": "%s", "command": "not_enabled"},' % menu_caption
 		if item_lists:
 			submenu_text = ''
 			submenu_text += '{\n'
