@@ -256,7 +256,10 @@ class SelectArduinoFolderCommand(sublime_plugin.WindowCommand):
 
 class ChangeSketchbookFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		home_root_list = stino.osfile.getHomeRootList()
+		self.window.run_command('show_file_explorer_panel', {'top_path_list':home_root_list, \
+			'condition_mod':'osfile', 'condition_func':'isButtonPress', 'function_mod':'actions', \
+			'function_func':'changeSketchbookRoot', 'with_files': False, 'with_button': True})
 
 class ToggleFullCompilationCommand(sublime_plugin.WindowCommand):
 	def run(self):

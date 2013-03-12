@@ -16,3 +16,14 @@ def changeArduinoRoot(arduino_root):
 		stino.cur_menu.update()
 		stino.const.settings.set('full_compilation', True)
 		stino.const.save_settings()
+
+def changeSketchbookRoot(sketchbook_root):
+	sketchbook_root = stino.utils.getInfoFromKey(sketchbook_root)[1]
+	pre_sketchbook_root = stino.const.settings.get('sketchbook_root')
+	stino.arduino_info.setSketchbookRoot(sketchbook_root)
+	log_text = 'Sketchbook folder have switched to %s.\n' % sketchbook_root
+	stino.log_panel.addText(log_text)
+
+	if sketchbook_root != pre_sketchbook_root:
+		stino.arduino_info.sketchbookUpdate()
+		stino.cur_menu.update()

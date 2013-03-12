@@ -115,8 +115,9 @@ def openUrl(url):
 def genFileListFromPathList(path_list):
 	file_list = []
 	for cur_path in path_list:
-		if cur_path == 'Button':
-			file_list.append('Select Current Folder')
+		if ('Stino_Button' + utils.info_sep) in cur_path:
+			parent_path = utils.getInfoFromKey(cur_path)[1]
+			file_list.append('Select Current Folder (%s)' % parent_path)
 		else:
 			cur_file = os.path.split(cur_path)[1]
 			if cur_file:
@@ -132,7 +133,8 @@ def genSubPathList(path, with_files = True, with_parent = True, with_button = Fa
 		file_list.insert(0, '..')
 	path_list = [os.path.join(path, cur_file) for cur_file in file_list]
 	if with_button:
-		path_list.insert(0, 'Button')
+		text = utils.genKey('Stino_Button', path)
+		path_list.insert(0, text)
 	return path_list
 
 def enterSubDir(top_path_list, level, index, sel_path, with_files = True, with_parent = True, with_button = False):
@@ -151,3 +153,10 @@ def enterSubDir(top_path_list, level, index, sel_path, with_files = True, with_p
 		path_list = genSubPathList(sel_path, with_files, with_parent, with_button)
 
 	return (level, path_list)
+
+def isButtonPress(text):
+	state = False
+	if not os.path.exists(text):
+		if 'Stino_Button' in text:
+			state = True
+	return state

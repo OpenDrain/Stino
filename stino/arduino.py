@@ -497,6 +497,12 @@ class Arduino:
 	def setSketchbookRoot(self, sketchbook_root):
 		const.settings.set('sketchbook_root', sketchbook_root)
 		const.save_settings()
+		libraries_path = os.path.join(sketchbook_root, 'libraries')
+		hardware_path = os.path.join(sketchbook_root, 'hardware')
+		path_list = [sketchbook_root, libraries_path, hardware_path]
+		for path in path_list:
+			if not os.path.exists(path):
+				os.mkdir(path)
 
 	def getSketchbookRoot(self):
 		sketchbook_root = const.settings.get('sketchbook_root')
@@ -519,13 +525,6 @@ class Arduino:
 			home_root = os.getenv('HOME')
 			document_root = os.path.join(home_path, 'Documents')
 			sketchbook_root = os.path.join(document_root, 'Arduino')
-
-		libraries_path = os.path.join(sketchbook_root, 'libraries')
-		hardware_path = os.path.join(sketchbook_root, 'hardware')
-		path_list = [sketchbook_root, libraries_path, hardware_path]
-		for path in path_list:
-			if not os.path.exists(path):
-				os.mkdir(path)
 		return sketchbook_root
 
 	def getSketchList(self):
