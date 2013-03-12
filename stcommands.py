@@ -6,19 +6,65 @@ import sublime_plugin
 import stino
 import time
 
+class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
+	def run(self, top_path_list, condition_mod, condition_func, function_mod, function_func, \
+		with_files = True, with_button = False):
+		self.level = 0
+		self.top_path_list = top_path_list
+		self.path_list = top_path_list
+		self.condition_module = getattr(stino, condition_mod)
+		self.condition_func = condition_func
+		self.function_module = getattr(stino, function_mod)
+		self.function_func = function_func
+		self.with_files = with_files
+		self.with_button = with_button
+
+		file_list = stino.osfile.genFileListFromPathList(self.path_list)
+		self.window.show_quick_panel(file_list, self.on_done)
+
+	def on_done(self, index):
+		if index == -1:
+			return
+
+		sel_path = self.path_list[index]
+		if getattr(self.condition_module, self.condition_func)(sel_path):
+			getattr(self.function_module, self.function_func)(sel_path)
+		else:		
+			(self.level, self.path_list) = stino.osfile.enterSubDir(self.top_path_list, \
+				self.level, index, sel_path, with_files = self.with_files, with_button = self.with_button)
+			file_list = stino.osfile.genFileListFromPathList(self.path_list)
+			self.window.show_quick_panel(file_list, self.on_done)
+
 class NotEnabled(sublime_plugin.WindowCommand):
 	def is_enabled(self):
 		return False
 
 class SketchListener(sublime_plugin.EventListener):
 	def on_new(self, view):
-		pass
+		stino.const.settings.set('show_arduino_menu', False)
+		stino.const.settings.set('show_serial_monitor_menu', False)
+		stino.const.save_settings()
+		stino.cur_menu.update()
 
 	def on_activated(self, view):
-		pass
+		if not stino.stpanel.isPanel(view):
+			pre_state = stino.const.settings.get('show_arduino_menu')
+			state = stino.src.isSketch(view)
+			if state != pre_state:
+				stino.const.settings.set('show_arduino_menu', state)
+				stino.const.save_settings()
+				stino.cur_menu.update()
+
+			pre_state = stino.const.settings.get('show_serial_monitor_menu')
+			state = stino.smonitor.isMonitorView(view)
+			if state != pre_state:
+				stino.const.settings.set('show_serial_monitor_menu', state)
+				stino.const.save_settings()
+				stino.cur_menu.update()
 
 	def on_close(self, view):
-		pass
+		if stino.smonitor.isMonitorView(view):
+			print 'Close Serial Monitor'
 
 class ShowArduinoMenuCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -203,7 +249,10 @@ class SelectLanguageCommand(sublime_plugin.WindowCommand):
 
 class SelectArduinoFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		app_root_list = stino.osfile.getAppRootList()
+		self.window.run_command('show_file_explorer_panel', {'top_path_list':app_root_list, \
+			'condition_mod':'arduino', 'condition_func':'isArduinoRoot', 'function_mod':'actions', \
+			'function_func':'changeArduinoRoot', 'with_files': False})
 
 class ChangeSketchbookFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -269,7 +318,7 @@ class SelectExampleCommand(sublime_plugin.WindowCommand):
 
 class OpenRefCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		print menu_str
+		stino.osfile.openUrl(menu_str)
 
 class FindInReferenceCommand(sublime_plugin.WindowCommand):
 	def run(self):

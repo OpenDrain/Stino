@@ -6,16 +6,12 @@ import os
 from stino import utils
 from stino import const
 from stino import osfile
-
-def getRealPath(path):
-	if const.sys_platform == 'osx':
-		path = os.path.join(path, 'Contents/Resources/JAVA')
-	return path
+from stino import src
 
 def isArduinoRoot(path):
 	state = False
 	if path and os.path.isdir(path):
-		path = getRealPath(path)
+		path = osfile.getRealPath(path)
 		hardware_path = os.path.join(path, 'hardware')
 		lib_path = os.path.join(path, 'lib')
 		version_file_path = os.path.join(lib_path, 'version.txt')
@@ -60,7 +56,7 @@ def parseVersionInfo(arduino_root):
 
 def isSketchFolder(path):
 	state = False
-	src_ext_list = ['.ino', '.pde', '.c', '.cc', '.cpp', '.cxx']
+	src_ext_list = src.src_ext_list
 	file_list = osfile.listDir(path, with_dirs = False)
 	for cur_file in file_list:
 		cur_file_ext = os.path.splitext(cur_file)[1]
@@ -195,7 +191,7 @@ def parseBoardFile(platform, boards_file_path):
 		type_key = utils.genKey(board_type, platform)
 		type_caption_dict[type_key] = board_type_caption_dict[board_type]
 
-	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name')
+	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name', none_sep = '.menu')
 	for board_info_block in board_info_block_list:
 		board_name_line = board_info_block[0]
 		(key, board) = utils.getKeyValue(board_name_line)
@@ -250,7 +246,7 @@ def parseProgrammerInfo(platform, core_root):
 
 def isLibraryFolder(path):
 	state = False
-	header_ext_list = ['.h', '.hpp']
+	header_ext_list = src.header_ext_list
 	file_list = osfile.listDir(path, with_dirs = False)
 	for cur_file in file_list:
 		cur_file_ext = os.path.splitext(cur_file)[1]
@@ -483,6 +479,17 @@ class Arduino:
 
 	def getArduinoRoot(self):
 		arduino_root = const.settings.get('arduino_root')
+		if not isArduinoRoot(arduino_root):
+			arduino_root = self.getDefaultArduinoRoot(self)
+		if arduino_root:
+			arduino_root = osfile.getRealPath(arduino_root)
+		return arduino_root
+
+	def getDefaultArduinoRoot(self):
+		if const.sys_platform == 'osx':
+			arduino_root = '/Applications/Arduino'
+		elif const.sys_platform == 'linux':
+			arduino_root = '/usr/share/arduino'
 		if not isArduinoRoot(arduino_root):
 			arduino_root = None
 		return arduino_root

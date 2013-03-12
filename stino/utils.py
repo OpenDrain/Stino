@@ -65,13 +65,16 @@ def getKeyValue(line):
 		value = ''
 	return (key, value)
 
-def splitToBlocks(lines, sep = '.name', key_length = 0):
+def splitToBlocks(lines, sep = '.name', none_sep = None, key_length = 0):
 	block_list = []
 	block = []
 	for line in lines:
 		line = line.strip()
 		if line and (not '#' in line):
 			sep_condtion = sep in line
+			none_sep_condition = True
+			if none_sep:
+				none_sep_condition = not none_sep in line
 			length_condition = False
 			if key_length > 0:
 				if '=' in line:
@@ -81,7 +84,7 @@ def splitToBlocks(lines, sep = '.name', key_length = 0):
 					if length == key_length:
 						length_condition = True
 
-			is_new_block = sep_condtion or length_condition
+			is_new_block = (sep_condtion and none_sep_condition) or length_condition
 			if is_new_block:
 				block_list.append(block)
 				block = [line]

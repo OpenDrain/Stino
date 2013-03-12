@@ -5,6 +5,14 @@ import sublime
 import threading
 import time
 
+def isPanel(view):
+	state = True
+	file_name = view.file_name()
+	name = view.name()
+	if file_name or name:
+		state = False
+	return state
+
 class STPanel:
 	def __init__(self, name = 'stino_log'):
 		self.name = name

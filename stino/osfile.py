@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 # stino/osfile.py
 
+import sublime
 import os
 
 from stino import utils
@@ -22,7 +23,8 @@ def getAppRootList():
 		home_root = os.getenv('HOME')
 		app_root_list = [home_root, '/usr', '/opt']
 	elif const.sys_platform == 'osx':
-		app_root_list = ['/Applications']
+		home_root = os.getenv('HOME')
+		app_root_list = ['/Applications', home_root]
 	return app_root_list
 
 def getHomeRootList():
@@ -96,3 +98,56 @@ def writeFile(file_path, text, encoding = 'utf-8'):
 	f = open(file_path, 'w')
 	f.write(text)
 	f.close()
+
+def getRealPath(path):
+	if const.sys_platform == 'osx':
+		path = os.path.join(path, 'Contents/Resources/JAVA')
+	return path
+
+def openUrl(url):
+	arduino_root = const.settings.get('arduino_root')
+	arduino_root = getRealPath(arduino_root)
+	reference_path = os.path.join(arduino_root, 'reference')
+	reference_path = reference_path.replace(os.path.sep, '/')
+	ref_file = '%s/%s.html' % (reference_path, url)
+	sublime.run_command('open_url', {'url': ref_file})
+
+def genFileListFromPathList(path_list):
+	file_list = []
+	for cur_path in path_list:
+		if cur_path == 'Button':
+			file_list.append('Select Current Folder')
+		else:
+			cur_file = os.path.split(cur_path)[1]
+			if cur_file:
+				file_list.append(cur_file)
+			else:
+				file_list.append(cur_path)
+	return file_list
+
+def genSubPathList(path, with_files = True, with_parent = True, with_button = False):
+	path = os.path.normpath(path)
+	file_list = listDir(path, with_files = with_files)
+	if with_parent:
+		file_list.insert(0, '..')
+	path_list = [os.path.join(path, cur_file) for cur_file in file_list]
+	if with_button:
+		path_list.insert(0, 'Button')
+	return path_list
+
+def enterSubDir(top_path_list, level, index, sel_path, with_files = True, with_parent = True, with_button = False):
+	cur_dir = os.path.split(sel_path)[1]
+	if level > 0:
+		if cur_dir == '..':
+			level -= 1
+		else:
+			level += 1
+	else:
+		level += 1
+
+	if level == 0:
+		path_list = top_path_list
+	else:
+		path_list = genSubPathList(sel_path, with_files, with_parent, with_button)
+
+	return (level, path_list)

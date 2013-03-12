@@ -45,6 +45,14 @@ def genSerialPortList():
 			serial_port_list += ['/dev/' + f.strip() for f in os.popen(cmd).readlines()]
 	return serial_port_list
 
+def isMonitorView(view):
+	state = ''
+	name = view.name()
+	if name:
+		if 'Serial Monitor - ' in name:
+			state = True
+	return state
+
 class SerialPortListener:
 	def __init__(self):
 		self.serial_list = []
