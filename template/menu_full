@@ -10,6 +10,7 @@
 			{"caption": "Import_Library->"},
 			{"caption": "%(Show_Sketch_Folder)s", "command": "show_sketch_folder"},
 			{"caption": "-"},
+			{"command": "change_extra_flags"},
 			{"caption": "%(Verify / Compile)s", "command": "compile_sketch"},
 			{"caption": "%(Upload)s", "command": "upload_binary"},
 			{"caption": "%(Upload_Using_Programmer)s", "command": "upload_using_programmer"},

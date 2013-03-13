@@ -3,6 +3,7 @@
 
 import sublime
 import sublime_plugin
+import os
 import stino
 import time
 
@@ -45,6 +46,7 @@ class SketchListener(sublime_plugin.EventListener):
 		stino.const.settings.set('show_serial_monitor_menu', False)
 		stino.const.save_settings()
 		stino.cur_menu.update()
+		stino.serial_listener.stop()
 
 	def on_activated(self, view):
 		if not stino.stpanel.isPanel(view):
@@ -54,6 +56,11 @@ class SketchListener(sublime_plugin.EventListener):
 				stino.const.settings.set('show_arduino_menu', state)
 				stino.const.save_settings()
 				stino.cur_menu.update()
+
+				if state:
+					stino.serial_listener.start()
+				else:
+					stino.serial_listener.stop()
 
 			pre_state = stino.const.settings.get('show_serial_monitor_menu')
 			state = stino.smonitor.isMonitorView(view)
@@ -79,17 +86,42 @@ class ShowArduinoMenuCommand(sublime_plugin.WindowCommand):
 
 class NewSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		text = '%(Name_for_new_sketch:)s'
+		caption = text % stino.cur_language.getTransDict()
+		self.window.show_input_panel(caption, '', self.on_done, None, None)
+
+	def on_done(self, input_text):
+		if input_text:
+			filename = stino.osfile.regulariseFilename(input_text)
+			if stino.osfile.existsInSketchbook(filename):
+				text = 'Sketch %s exists, please use another file name.' % filename
+				stino.log_panel.addText(text)
+			else:
+				stino.src.createNewSketch(filename)
+				stino.arduino_info.sketchbookUpdate()
+				stino.cur_menu.update()
 
 class OpenSketchCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		sketch = menu_str
-		sketch_path = stino.arduino_info.getSketchPath(sketch)
-		print sketch_path
+		stino.src.openSketch(menu_str)
 
 class NewToSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		text = '%(Name_for_new_file:)s'
+		caption = text % stino.cur_language.getTransDict()
+		self.window.show_input_panel(caption, '', self.on_done, None, None)
+
+	def on_done(self, input_text):
+		if input_text:
+			filename = stino.osfile.regulariseFilename(input_text)
+			view_file_name = self.window.active_view().file_name()
+			folder_path = os.path.split(view_file_name)[0]
+			new_file_path = os.path.join(folder_path, filename)
+			if os.path.exists(new_file_path):
+				text = 'File %s exists, please use another file name.' % filename
+				stino.log_panel.addText(text)
+			else:
+				stino.src.createNewFile(self.window, new_file_path)
 
 class ImportLibraryCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
@@ -99,7 +131,37 @@ class ImportLibraryCommand(sublime_plugin.WindowCommand):
 
 class ShowSketchFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		filename = self.window.active_view().file_name()
+		folder_path = os.path.split(filename)[0]
+		sketch_folder_path = stino.src.getSketchFolderPath(folder_path)
+		self.window.run_command('show_file_explorer_panel', {'top_path_list':[sketch_folder_path], \
+			'condition_mod':'osfile', 'condition_func':'isFile', 'function_mod':'osfile', \
+			'function_func':'openFile', 'with_files': False})
+
+class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
+	def run(self):
+		text = '%(Name_for_new_sketch:)s'
+		caption = text % stino.cur_language.getTransDict()
+		extra_flags = stino.const.settings.get('extra_flags')
+		if (not extra_flags) or (len(extra_flags) < 2):
+			extra_flags = '-D'
+		self.window.show_input_panel(caption, extra_flags, self.on_done, None, None)
+
+	def on_done(self, input_text):
+		extra_flags = input_text
+		if (not extra_flags) or (len(extra_flags) < 2):
+			extra_flags = '-D'
+		stino.const.settings.set('extra_flags', extra_flags)
+		stino.const.save_settings()
+
+	def description(self):
+		extra_flags = stino.const.settings.get('extra_flags')
+		if (not extra_flags) or (len(extra_flags) < 2):
+			caption = '%(Add_Extra_Flags)s'
+		else:
+			caption = '%(Change_Extra_Flags)s'
+		caption = caption % stino.cur_language.getTransDict()
+		return caption
 
 class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):

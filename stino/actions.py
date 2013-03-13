@@ -27,3 +27,6 @@ def changeSketchbookRoot(sketchbook_root):
 	if sketchbook_root != pre_sketchbook_root:
 		stino.arduino_info.sketchbookUpdate()
 		stino.cur_menu.update()
+
+def updateSerialMenu():
+	stino.cur_menu.update()

@@ -9,6 +9,7 @@ import time
 
 from stino import const
 from stino import stpanel
+from stino import actions
 
 if const.sys_platform == 'windows':
 	import _winreg
@@ -66,15 +67,15 @@ class SerialPortListener:
 
 	def update(self):
 		while self.is_alive:
+			pre_serial_list = self.serial_list
 			self.serial_list = genSerialPortList()
+			if self.serial_list != pre_serial_list:
+				sublime.set_timeout(actions.updateSerialMenu, 0)
 			time.sleep(0.5)
 
 	def stop(self):
 		if self.is_alive:
 			self.is_alive = False
-
-	def getSerialList(self):
-		return self.serial_list
 
 class SerialMonitor:
 	def __init__(self, serial_port):

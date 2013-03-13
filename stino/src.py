@@ -5,6 +5,7 @@ import sublime
 import os
 
 from stino import osfile
+from stino import const
 
 header_ext_list = ['.h', '.hpp']
 arduino_ext_list = ['.ino', '.pde']
@@ -46,3 +47,40 @@ def isMainSketch(sketch):
 	if sketch_text:
 		pass
 	return state
+
+def createNewSketch(filename):
+	sketchbook_root = const.settings.get('sketchbook_root')
+	folder_path = os.path.join(sketchbook_root, filename)
+	file_path = os.path.join(folder_path, filename)
+	file_path += '.ino'
+
+	template_file_path = os.path.join(const.template_root, 'sketch')
+	os.mkdir(folder_path)
+	text = osfile.readFileText(template_file_path)
+	osfile.writeFile(file_path, text)
+	openSketch(filename)
+
+def openSketch(sketch):
+	sketchbook_root = const.settings.get('sketchbook_root')
+	folder_path = os.path.join(sketchbook_root, sketch)
+	full_file_list = osfile.listDir(folder_path, with_dirs = False)
+
+	file_list = []
+	for cur_file in full_file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in src_ext_list:
+			file_list.append(cur_file)
+
+	file_path_list = [os.path.join(folder_path, cur_file) for cur_file in file_list]
+
+	sublime.run_command('new_window')
+	window = sublime.windows()[-1]
+
+	for cur_file_path in file_path_list:
+		window.open_file(cur_file_path)
+
+def createNewFile(window, file_path):
+	filename = os.path.split(file_path)[1]
+	text = '// %s\n\n' % filename
+	osfile.writeFile(file_path, text)
+	window.open_file(file_path)

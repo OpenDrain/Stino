@@ -160,3 +160,19 @@ def isButtonPress(text):
 		if 'Stino_Button' in text:
 			state = True
 	return state
+
+def regulariseFilename(filename):
+	if filename:
+		if filename[0] in '0123456789':
+			filename = '_' + filename
+		filename = filename.replace(' ', '_')
+	return filename
+
+def existsInSketchbook(filename):
+	state = False
+	sketchbook_root = const.settings.get('sketchbook_root')
+	folder_path = os.path.join(sketchbook_root, filename)
+	if os.path.exists(folder_path):
+		state = True
+	return state
+
