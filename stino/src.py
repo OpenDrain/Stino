@@ -3,49 +3,116 @@
 
 import sublime
 import os
+import re
 
 from stino import osfile
 from stino import const
+from stino import utils
 
 header_ext_list = ['.h', '.hpp']
 arduino_ext_list = ['.ino', '.pde']
 src_ext_list = ['.ino', '.pde', '.c', '.cc', '.cpp', '.cxx']
 
+def genSimpleSrcText(src_text):
+	simple_src_text = ''
+	src_text = src_text.replace('#', '\n#')
+	src_text = src_text.replace('{', '\n{\n')
+	src_text = src_text.replace('}', '\n}\n')
+	src_lines = utils.convertTextToLines(src_text)
+	
+	level = 0
+	for line in src_lines:
+		line = line.strip()
+		if line and (not line[:2] == '//'):
+			if '}' in line:
+				level -= 1
+			if level == 0:
+				simple_src_text += line
+				simple_src_text += '\n'
+			if '{' in line:
+				level += 1
+	return simple_src_text
+
+def regulariseBlank(text):
+	pattern_text = r'\S+'
+	word_list = re.findall(pattern_text, text)
+	
+	text = ''
+	for word in word_list:
+		text += word
+		text += ' '
+	text = text[:-1]
+	return text
+
+def regulariseFuctionText(function_text):
+	text_list = function_text.split('(')
+	function_name = text_list[0]
+	parameters = text_list[1][:-1]
+	function_name = regulariseBlank(function_name)
+	parameters = regulariseBlank(parameters)
+	function_text = function_name + '(' + parameters + ')'
+	return function_text
+
+def genSrcDeclarationList(simple_src_text):
+	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?\;'
+	declaration_list = re.findall(pattern_text, simple_src_text)
+	src_declaration_list = [declaration[:-1].strip() for declaration in declaration_list]
+	src_declaration_list = [regulariseFuctionText(declaration) for declaration in src_declaration_list]
+	return src_declaration_list
+
+def genSrcFunctionList(simple_src_text):
+	src_function_list = []
+	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?\{\s*?}'
+	function_text_list = re.findall(pattern_text, simple_src_text)
+	for function_text in function_text_list:
+		function = function_text.split('{')[0].strip()
+		function = regulariseFuctionText(function)
+		src_function_list.append(function)
+	return src_function_list
+
+def isMainSrcText(src_text):
+	state = False
+	simple_src_text = genSimpleSrcText(src_text)
+	src_function_list = genSrcFunctionList(simple_src_text)
+	if 'void setup()' in src_function_list and 'void loop()' in src_function_list:
+		state = True
+	return state
+
 def isSketch(sketch):
 	state = False
 	sketch_ext = ''
-	sketch_text = ''
-	if isinstance(sketch, file):
-		sketch_ext = os.path.splitext(sketch)[1]
-	elif isinstance(sketch, type(sublime.active_window().active_view())):
+	
+	if isinstance(sketch, type(sublime.active_window().active_view())):
 		sketch_name = sketch.file_name()
 		if sketch_name:
 			sketch_ext = os.path.splitext(sketch_name)[1]
+	else:
+		if os.path.isfile(sketch):
+			sketch_ext = os.path.splitext(sketch)[1]		
 	
 	if sketch_ext in arduino_ext_list:
 		state = True
 	else:
-		if isinstance(sketch, file):
-			if sketch_ext in src_ext_list:
-				sketch_text = osfile.readFileText(sketch)
-		elif isinstance(sketch, type(sublime.active_window().active_view())):
-			region = sublime.Region(0, sketch.size())
-			sketch_text = sketch.substr(region)
-	
-	if sketch_text:
-		state = isMainSketch(sketch_text)
+		state = isMainSketch(sketch)
 	return state
 
 def isMainSketch(sketch):
 	state = False
 	sketch_text = ''
-	if isinstance(sketch, file):
-		sketch_text = osfile.readFileText(sketch)
-	elif isinstance(sketch, basestring):
-		sketch_text = sketch
+
+	if isinstance(sketch, type(sublime.active_window().active_view())):
+		region = sublime.Region(0, sketch.size())
+		sketch_text = sketch.substr(region)
+	else:
+		if os.path.isfile(sketch):
+			sketch_ext = os.path.splitext(sketch)[1]
+			if sketch_ext in src_ext_list:
+				sketch_text = osfile.readFileText(sketch)
+		elif isinstance(sketch, basestring):
+			sketch_text = sketch
 
 	if sketch_text:
-		pass
+		state = isMainSrcText(sketch_text)
 	return state
 
 def createNewSketch(filename):
@@ -84,3 +151,45 @@ def createNewFile(window, file_path):
 	text = '// %s\n\n' % filename
 	osfile.writeFile(file_path, text)
 	window.open_file(file_path)
+
+def getSketchFolderPathFromSketchbook(file_path):
+	sketchbook_root = const.settings.get('sketchbook_root')
+	file_path = file_path.replace(sketchbook_root, '')
+	file_path = file_path[1:]
+	folder = file_path.split(os.path.sep)[0]
+	folder_path = os.path.join(sketchbook_root, folder)
+	return folder_path
+
+def hasMainSketchInFolder(folder_path):
+	state = False
+	file_list = osfile.listDir(folder_path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_path = os.path.join(folder_path, cur_file)
+		if isMainSketch(cur_file_path):
+			state = True
+			break
+	return state
+
+def getSketchFolderPathWithoutSketchbook(file_path):
+	folder_path = os.path.split(file_path)[0]
+	if not isMainSketch(file_path):
+		has_main_sketch = False
+		cur_path = file_path
+		while not has_main_sketch:
+			cur_path = os.path.split(cur_path)[0]
+			if cur_path[-1] == os.path.sep:
+				cur_path = cur_path[:-1]
+			if not os.path.sep in cur_path:
+				break
+			has_main_sketch = hasMainSketchInFolder(cur_path)
+		if has_main_sketch:
+			folder_path = cur_path
+	return folder_path
+
+def getSketchFolderPath(file_path):
+	sketchbook_root = const.settings.get('sketchbook_root')
+	if sketchbook_root in file_path:
+		folder_path = getSketchFolderPathFromSketchbook(file_path)
+	else:
+		folder_path = getSketchFolderPathWithoutSketchbook(file_path)
+	return folder_path

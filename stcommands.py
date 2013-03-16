@@ -51,7 +51,13 @@ class SketchListener(sublime_plugin.EventListener):
 	def on_activated(self, view):
 		if not stino.stpanel.isPanel(view):
 			pre_state = stino.const.settings.get('show_arduino_menu')
-			state = stino.src.isSketch(view)
+			filename = view.file_name()
+			
+			sketch = view
+			if filename:
+				if not view.is_dirty():
+					sketch = filename
+			state = stino.src.isSketch(sketch)
 			if state != pre_state:
 				stino.const.settings.set('show_arduino_menu', state)
 				stino.const.save_settings()
@@ -132,11 +138,14 @@ class ImportLibraryCommand(sublime_plugin.WindowCommand):
 class ShowSketchFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		filename = self.window.active_view().file_name()
-		folder_path = os.path.split(filename)[0]
-		sketch_folder_path = stino.src.getSketchFolderPath(folder_path)
-		self.window.run_command('show_file_explorer_panel', {'top_path_list':[sketch_folder_path], \
-			'condition_mod':'osfile', 'condition_func':'isFile', 'function_mod':'osfile', \
-			'function_func':'openFile', 'with_files': False})
+		if filename:
+			path = stino.src.getSketchFolderPath(filename)
+			print path
+			folder_path = os.path.split(filename)[0]
+			sketch_folder_path = stino.src.getSketchFolderPath(folder_path)
+			self.window.run_command('show_file_explorer_panel', {'top_path_list':[sketch_folder_path], \
+				'condition_mod':'osfile', 'condition_func':'isFile', 'function_mod':'osfile', \
+				'function_func':'openFile'})
 
 class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 	def run(self):

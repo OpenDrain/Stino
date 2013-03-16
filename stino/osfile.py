@@ -176,3 +176,10 @@ def existsInSketchbook(filename):
 		state = True
 	return state
 
+def isFile(path):
+	return os.path.isfile(path)
+
+def openFile(file_path):
+	window = sublime.active_window()
+	window.open_file(file_path)
+
