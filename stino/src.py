@@ -13,6 +13,24 @@ header_ext_list = ['.h', '.hpp']
 arduino_ext_list = ['.ino', '.pde']
 src_ext_list = ['.ino', '.pde', '.c', '.cc', '.cpp', '.cxx']
 
+def getTextFromView(view):
+	region = sublime.Region(0, view.size())
+	text = view.substr(region)
+	return text
+
+def getTextFromSketch(sketch):
+	sketch_text = ''
+	if isinstance(sketch, type(sublime.active_window().active_view())):
+		sketch_text = getTextFromView(sketch)
+	else:
+		if os.path.isfile(sketch):
+			sketch_ext = os.path.splitext(sketch)[1]
+			if sketch_ext in src_ext_list:
+				sketch_text = osfile.readFileText(sketch)
+		elif isinstance(sketch, basestring):
+			sketch_text = sketch
+	return sketch_text
+
 def genSimpleSrcText(src_text):
 	simple_src_text = ''
 	src_text = src_text.replace('#', '\n#')
@@ -98,19 +116,7 @@ def isSketch(sketch):
 
 def isMainSketch(sketch):
 	state = False
-	sketch_text = ''
-
-	if isinstance(sketch, type(sublime.active_window().active_view())):
-		region = sublime.Region(0, sketch.size())
-		sketch_text = sketch.substr(region)
-	else:
-		if os.path.isfile(sketch):
-			sketch_ext = os.path.splitext(sketch)[1]
-			if sketch_ext in src_ext_list:
-				sketch_text = osfile.readFileText(sketch)
-		elif isinstance(sketch, basestring):
-			sketch_text = sketch
-
+	sketch_text = getTextFromSketch(sketch)
 	if sketch_text:
 		state = isMainSrcText(sketch_text)
 	return state
@@ -193,3 +199,50 @@ def getSketchFolderPath(file_path):
 	else:
 		folder_path = getSketchFolderPathWithoutSketchbook(file_path)
 	return folder_path
+
+def genHeaderListFromSketch(sketch):
+	header_list = []
+	sketch_text = getTextFromSketch(sketch)
+	simple_src_text = genSimpleSrcText(sketch_text)
+	pattern_text = r'#include\s+["<]\S+?[>"]'
+	include_header_list = re.findall(pattern_text, simple_src_text)
+	for include_header in include_header_list:
+		header = include_header.replace('#include', '').strip()
+		header = header[1:-1]
+		header_list.append(header)
+	return header_list
+
+def getHeaderListFromFolder(folder_path):
+	header_list = []
+	file_list = osfile.listDir(folder_path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in header_ext_list:
+			header_list.append(cur_file)
+	return header_list
+
+def getIncludeHeaderList(folder_path, view):
+	header_list = []
+	header_list_from_view = genHeaderListFromSketch(view)
+	header_list_from_folder = getHeaderListFromFolder(folder_path)
+	for header in header_list_from_folder:
+		if not header in header_list_from_view:
+			header_list.append(header)
+	return header_list
+
+def getIncludeHeaderText(folder_path, view):
+	header_list = getIncludeHeaderList(folder_path, view)
+	include_header_list = [('#include <' + header + '>\n') for header in header_list]
+	include_text = ''
+	for include_header in include_header_list:
+		include_text += include_header
+	if include_text:
+		include_text += '\n'
+	return include_text
+
+def insertLibraries(folder_path, view):
+	include_text = getIncludeHeaderText(folder_path, view)
+	edit = view.begin_edit()
+	position = 0
+	view.insert(edit, position, include_text)
+	view.end_edit(edit)
