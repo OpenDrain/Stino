@@ -3,6 +3,7 @@
 		"id": "serial_monitor",
 		"children":
 		[
+			{"caption": "%(Start)s", "command": "start_serial_monitor"},
 			{"caption": "%(Stop)s", "command": "stop_serial_monitor"},
 			{"caption": "%(Send)s", "command": "send_to_serial"}
 		]

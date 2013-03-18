@@ -2,6 +2,7 @@
 # stino/arduino.py
 
 import os
+import re
 
 from stino import utils
 from stino import const
@@ -292,6 +293,50 @@ def parseLibraryExampleInfo(platform, library_path_list):
 			example_path_dict[key] = examples_path
 	return (example_list, example_path_dict)
 
+def parseKeywordListFromFile(keywords_file_path):
+	keyword_list = []
+	keyword_type_dict = {}
+	keyword_ref_dict = {}
+	lines = osfile.readFileLines(keywords_file_path)
+	for line in lines:
+		line = line.strip()
+		if line and (not '#' in line):
+			word_list = re.findall(r'\S+', line)
+			if len(word_list) > 1:
+				keyword = word_list[0]
+				if len(word_list) == 3:
+					keyword_type = word_list[1]
+					keyword_ref = word_list[2]
+				elif len(word_list) == 2:
+					if 'LITERAL' in word_list[1] or 'KEYWORD' in word_list[1]:
+						keyword_type = word_list[1]
+						keyword_ref = ''
+					else:
+						keyword_type = ''
+						keyword_ref = word_list[1]
+				if not keyword in keyword_list:
+					keyword_list.append(keyword)
+					keyword_type_dict[keyword] = keyword_type
+					keyword_ref_dict[keyword] = keyword_ref
+	return (keyword_list, keyword_type_dict, keyword_ref_dict)
+
+def parseKeywordList(platform, lib_path_list):
+	keyword_list = []
+	keyword_type_dict = {}
+	keyword_ref_dict = {}
+
+	for lib_path in lib_path_list:
+		keywords_file_path = os.path.join(lib_path, 'keywords.txt')
+		if os.path.isfile(keywords_file_path):
+			(keyword_list_form_file, keyword_type_dict_from_file, keyword_ref_dict_from_file) = parseKeywordListFromFile(keywords_file_path)
+			for keyword in keyword_list_form_file:
+				if not keyword in keyword_list:
+					keyword_list.append(keyword)
+					key = utils.genKey(keyword, platform)
+					keyword_type_dict[key] = keyword_type_dict_from_file[keyword]
+					keyword_ref_dict[key] = keyword_ref_dict_from_file[keyword]
+	return (keyword_list, keyword_type_dict, keyword_ref_dict)
+
 class Arduino:
 	def __init__(self):
 		self.sketch_list = []
@@ -329,6 +374,7 @@ class Arduino:
 		self.genPlatformProgrammerLists()
 		self.genPlatformLibraryLists()
 		self.genPlatformExampleLists()
+		self.genKeywordList()
 
 	def isReady(self):
 		state = False
@@ -473,6 +519,26 @@ class Arduino:
 					self.platform_example_lists_dict[platform].append(example_list)
 					self.example_path_dict = dict(self.example_path_dict, **example_path_dict)
 
+	def genKeywordList(self):
+		self.platform_keyword_list_dict = {}
+		self.keyword_type_dict = {}
+		self.keyword_ref_dict = {}
+
+		arduino_root = self.getArduinoRoot()
+		lib_path = os.path.join(arduino_root, 'lib')
+
+		platform_list = self.getPlatformList()
+		for platform in platform_list:
+			lib_path_list = [lib_path]
+			library_lists = self.getLibraryLists(platform)
+			for library_list in library_lists:
+				library_path_list = [self.getLibraryPath(platform, library) for library in library_list]
+				lib_path_list += library_path_list
+			(keyword_list, keyword_type_dict, keyword_ref_dict) = parseKeywordList(platform, lib_path_list)
+			self.platform_keyword_list_dict[platform] = keyword_list
+			self.keyword_type_dict = dict(self.keyword_type_dict, **keyword_type_dict)
+			self.keyword_ref_dict = dict(self.keyword_ref_dict, **keyword_ref_dict)
+
 	def setArduinoRoot(self, arduino_root):
 		const.settings.set('arduino_root', arduino_root)
 		const.save_settings()
@@ -499,7 +565,8 @@ class Arduino:
 		const.save_settings()
 		libraries_path = os.path.join(sketchbook_root, 'libraries')
 		hardware_path = os.path.join(sketchbook_root, 'hardware')
-		path_list = [sketchbook_root, libraries_path, hardware_path]
+		temp_path = os.path.join(sketchbook_root, 'temp')
+		path_list = [sketchbook_root, libraries_path, hardware_path, temp_path]
 		for path in path_list:
 			if not os.path.exists(path):
 				os.mkdir(path)
@@ -624,6 +691,26 @@ class Arduino:
 		if key in self.example_path_dict:
 			path = self.example_path_dict[key]
 		return path
+
+	def getKeywordList(self, platform):
+		keyword_list = []
+		if platform in self.platform_list:
+			keyword_list = self.platform_keyword_list_dict[platform]
+		return keyword_list
+
+	def getKeywordType(self, platform, keyword):
+		keyword_type = ''
+		key = utils.genKey(keyword, platform)
+		if key in self.keyword_type_dict:
+			keyword_type = self.keyword_type_dict[key]
+		return keyword_type
+
+	def getKeywordRef(self, platform, keyword):
+		keyword_ref = ''
+		key = utils.genKey(keyword, platform)
+		if key in self.keyword_ref_dict:
+			keyword_ref = self.keyword_ref_dict[key]
+		return keyword_ref
 
 	def getVersion(self):
 		return self.version

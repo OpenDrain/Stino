@@ -4,6 +4,7 @@
 import sublime
 import os
 import re
+import shutil
 
 from stino import osfile
 from stino import const
@@ -246,3 +247,26 @@ def insertLibraries(folder_path, view):
 	position = 0
 	view.insert(edit, position, include_text)
 	view.end_edit(edit)
+
+def openExample(path):
+	folder_name = os.path.split(path)[1]
+	sketchbook_root = const.settings.get('sketchbook_root')
+	des_path = os.path.join(sketchbook_root, 'temp')
+	des_path = os.path.join(des_path, folder_name)
+	
+	number = 0
+	new_des_path = des_path
+	while os.path.exists(new_des_path):
+		number += 1
+		new_des_path = des_path + ('_%d' % number)
+	des_path = new_des_path
+	
+	shutil.copytree(path, des_path, True)
+	sublime.run_command('new_window')
+	window = sublime.windows()[-1]
+	file_list = osfile.listDir(des_path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in src_ext_list:
+			cur_file_path = os.path.join(des_path, cur_file)
+			window.open_file(cur_file_path)

@@ -23,15 +23,34 @@ class STMenu:
 
 		self.original_menu_text = ''
 		self.full_menu_text = ''
-		self.update()
+		self.commands_text = ''
+		self.completions_text = ''
+		self.syntax_text = ''
+		self.fullUpdate()
 
 	def update(self):
 		self.genOriginalMenuText()
 		self.genFullMenuText()
 		self.writeMainMenuFile()
+		self.genCommandsText()
+		self.writeCommandsFile()
+
+	def fullUpdate(self):
+		self.genOriginalMenuText()
+		self.genFullMenuText()
+		self.writeMainMenuFile()
+		self.genCommandsText()
+		self.writeCommandsFile()
+		self.genCompletionsText()
+		self.writeCompletionsFile()
+		self.genSyntaxText()
+		self.writeSyntaxFile()
 
 	def languageUpdate(self):
-		pass
+		self.writeMainMenuFile()
+		self.writeCommandsFile()
+		self.writeCompletionsFile()
+		self.writeSyntaxFile()
 
 	def genOriginalMenuText(self):
 		show_arduino_menu = const.settings.get('show_arduino_menu')
@@ -89,6 +108,30 @@ class STMenu:
 			submenu_text += '\t'*3
 			submenu_text += '},\n'
 		return submenu_text
+
+	def genDictBlock(self, info_list, description):
+		dict_text = ''
+		if info_list:
+			dict_text += '\t' * 2
+			dict_text += '<dict>\n'
+			dict_text += '\t' * 3
+			dict_text += '<key>match</key>\n'
+			dict_text += '\t' * 3
+			dict_text += '<string>\\b('
+			for item in info_list:
+				dict_text += item
+				dict_text += '|'
+			dict_text = dict_text[:-1]
+			dict_text += ')\\b</string>\n'
+			dict_text += '\t' * 3
+			dict_text += '<key>name</key>\n'
+			dict_text += '\t' * 3
+			dict_text += '<string>'
+			dict_text += description
+			dict_text += '</string>\n'
+			dict_text += '\t' * 2
+			dict_text += '</dict>'
+		return dict_text
 
 	def genSketchbookMenuText(self):
 		sketch_list = self.arduino_info.getSketchList()
@@ -225,6 +268,71 @@ class STMenu:
 		menu_text = self.getFullMneuText() % self.language.getTransDict()
 		osfile.writeFile(self.main_menu_file, menu_text)
 
+	def genCommandsText(self):
+		temp_filename = 'commands_mini'
+		if self.arduino_info.isReady():
+			show_arduino_menu = const.settings.get('show_arduino_menu')
+			if show_arduino_menu:
+				temp_filename = 'commands_full'
+			
+		temp_file_path = os.path.join(self.template_root, temp_filename)
+		temp_file_text = osfile.readFileText(temp_file_path)
+
+		if temp_filename == 'commands_full':
+			temp_file_text = temp_file_text.replace('(_$item$_)', '')
+		self.commands_text = temp_file_text % self.language.getTransDict()
+
+	def writeCommandsFile(self):
+		commands_text = self.getCommandsText() % self.language.getTransDict()
+		osfile.writeFile(self.commands_file, commands_text)
+
+	def genCompletionsText(self):
+		self.completions_text = '{\n'
+		self.completions_text += '\t"scope": "source.arduino",\n'
+		self.completions_text += '\t"completions":\n'
+		self.completions_text += '\t[\n'
+		if self.arduino_info.isReady():
+			platform = self.getPlatform()
+			for keyword in self.arduino_info.getKeywordList(platform):
+				if self.arduino_info.getKeywordType(platform, keyword):
+					self.completions_text += '\t\t"%s",\n' % keyword
+			self.completions_text = self.completions_text[:-2] + '\n'
+		self.completions_text += '\t]\n'
+		self.completions_text += '}'
+
+	def writeCompletionsFile(self):
+		completions_text = self.getCompletionsText() % self.language.getTransDict()
+		osfile.writeFile(self.completions_file, completions_text)
+
+	def genSyntaxText(self):
+		constant_list = []
+		keyword_list = []
+		function_list = []
+		if self.arduino_info.isReady():
+			platform = self.getPlatform()
+			for keyword in self.arduino_info.getKeywordList(platform):
+				keyword_type = self.arduino_info.getKeywordType(platform, keyword)
+				if keyword_type:
+					if 'LITERAL' in keyword_type:
+						constant_list.append(keyword)
+					elif keyword_type == 'KEYWORD1':
+						keyword_list.append(keyword)
+					else:
+						function_list.append(keyword)
+
+		text = ''
+		text += self.genDictBlock(constant_list, 'constant.arduino')
+		text += self.genDictBlock(keyword_list, 'keyword.arduino')
+		text += self.genDictBlock(function_list, 'entity.name.function.arduino')
+
+		temp_file = os.path.join(self.template_root, 'syntax')
+		self.syntax_text = osfile.readFileText(temp_file)
+		self.syntax_text = self.syntax_text.replace('(_$dict$_)', text)
+
+	def writeSyntaxFile(self):
+		syntax_text = self.getSyntaxText() % self.language.getTransDict()
+		osfile.writeFile(self.syntax_file, syntax_text)
+
 	def getPlatform(self):
 		platform = const.settings.get('platform')
 		platform_list = self.arduino_info.getPlatformList()
@@ -254,3 +362,18 @@ class STMenu:
 		if not self.full_menu_text:
 			self.genFullMenuText()
 		return self.full_menu_text
+
+	def getCommandsText(self):
+		if not self.commands_text:
+			self.genCommandsText()
+		return self.commands_text
+
+	def getCompletionsText(self):
+		if not self.completions_text:
+			self.genCompletionsText()
+		return self.completions_text
+
+	def getSyntaxText(self):
+		if not self.syntax_text:
+			self.genSyntaxText()
+		return self.syntax_text

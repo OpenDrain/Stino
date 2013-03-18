@@ -36,7 +36,20 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 			file_list = stino.osfile.genFileListFromPathList(self.path_list)
 			self.window.show_quick_panel(file_list, self.on_done)
 
-class NotEnabled(sublime_plugin.WindowCommand):
+class SelectItemCommand(sublime_plugin.WindowCommand):
+	def run(self, info_list, command):
+		self.command = command
+		self.info_list = info_list
+		self.window.show_quick_panel(self.info_list, self.on_done)
+
+	def on_done(self, index):
+		if index == -1:
+			return
+			
+		sel_item = self.info_list[index]
+		print sel_item
+
+class NotEnabledCommand(sublime_plugin.WindowCommand):
 	def is_enabled(self):
 		return False
 
@@ -440,7 +453,9 @@ class SelectExampleCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		(example, platform) = stino.utils.getInfoFromKey(menu_str)
 		example_path = stino.arduino_info.getExamplePath(platform, example)
-		print example_path
+		self.window.run_command('show_file_explorer_panel', {'top_path_list':[example_path], \
+				'condition_mod':'arduino', 'condition_func':'isSketchFolder', 'function_mod':'src', \
+				'function_func':'openExample'})
 
 class OpenRefCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
@@ -448,8 +463,16 @@ class OpenRefCommand(sublime_plugin.WindowCommand):
 
 class FindInReferenceCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		platform = stino.const.settings.get('platform')
+		keyword_list = stino.arduino_info.getKeywordList(platform)
+		print platform
+		for keyword in keyword_list:
+			keyword_type = stino.arduino_info.getKeywordType(platform, keyword)
+			keyword_ref = stino.arduino_info.getKeywordRef(platform, keyword)
+			print '%s\t%s\t%s' % (keyword, keyword_type, keyword_ref)
 
 class AboutStinoCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		text = '%(Stino)s'
+		msg = text % stino.cur_language.getTransDict()
+		sublime.message_dialog(msg)
