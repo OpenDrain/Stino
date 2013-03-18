@@ -52,11 +52,11 @@ class MonitorView:
 	def __init__(self, name = 'Serial Monitor - Serial Port'):
 		self.name = name
 		self.show_text = ''
-		window = sublime.active_window()
-		if not (window is None):
+		self.window = sublime.active_window()
+		if not (self.window is None):
 			self.view = self.findInOpendView(self.name)
 			if self.view is None:
-				self.view = window.new_file()
+				self.view = self.window.new_file()
 				self.view.set_name(self.name)
 		else:
 			self.view = None
@@ -79,13 +79,13 @@ class MonitorView:
 
 	def addText(self, text):
 		if self.view is None:
-			window = sublime.active_window()
-			if not (window is None):
+			self.window = sublime.active_window()
+			if not (self.window is None):
 				self.view = self.findInOpendView(self.name)
 				if self.view is None:
-					self.view = window.new_file()
+					self.view = self.window.new_file()
 					self.view.set_name(self.name)
-		if not (self.viewl is None):
+		if not (self.view is None):
 			self.show_text += text
 			shwo_thread = threading.Thread(target=self.show)
 			shwo_thread.start()
@@ -100,3 +100,6 @@ class MonitorView:
 			self.view.end_edit(view_edit)
 			self.view.show(self.view.size())
 			self.show_text = ''
+
+	def raiseToFront(self):
+		self.window.focus_view(self.view)

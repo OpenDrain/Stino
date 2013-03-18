@@ -75,10 +75,17 @@ class SketchListener(sublime_plugin.EventListener):
 				stino.const.settings.set('show_serial_monitor_menu', state)
 				stino.const.save_settings()
 				stino.cur_menu.update()
+				view.window().run_command('send_to_serial')
 
 	def on_close(self, view):
 		if stino.smonitor.isMonitorView(view):
-			print 'Close Serial Monitor'
+			name = view.name()
+			serial_port = name.split('-')[1].strip()
+			if serial_port in stino.serial_port_monitor_dict:
+				serial_monitor = stino.serial_port_monitor_dict[serial_port]
+				serial_monitor.stop()
+				if serial_port in stino.serial_port_in_use_list:
+					stino.serial_port_in_use_list.remove(serial_port)
 
 class ShowArduinoMenuCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -253,26 +260,72 @@ class SelectBaudrateCommand(sublime_plugin.WindowCommand):
 
 class StartSerialMonitorCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		serial_port = stino.const.settings.get('serial_port')
+		if not serial_port in stino.serial_port_in_use_list:
+			serial_monitor = stino.smonitor.SerialMonitor(serial_port)
+			stino.serial_port_in_use_list.append(serial_port)
+			stino.serial_port_monitor_dict[serial_port] = serial_monitor
+		else:
+			serial_monitor = stino.serial_port_monitor_dict[serial_port]
+		serial_monitor.start()
+		self.window.run_command('send_to_serial')
 
 	def is_enabled(self):
-		state = True
+		state = False
+		serial_port = stino.const.settings.get('serial_port')
+		serial_port_list = stino.smonitor.genSerialPortList()
+		if serial_port in serial_port_list:
+			# if not serial_port in stino.serial_port_in_use_list:
+			if stino.smonitor.isSerialPortAvailable(serial_port):
+				state = True
 		return state
 
 class StopSerialMonitorCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		name = self.window.active_view().name()
+		serial_port = name.split('-')[1].strip()
+		serial_monitor = stino.serial_port_monitor_dict[serial_port]
+		serial_monitor.stop()
+		if serial_port in stino.serial_port_in_use_list:
+			stino.serial_port_in_use_list.remove(serial_port)
 
 	def is_enabled(self):
-		state = True
+		state = False
+		view = self.window.active_view()
+		if stino.smonitor.isMonitorView(view):
+			name = view.name()
+			serial_port = name.split('-')[1].strip()
+			serial_port_list = stino.serial_port_in_use_list
+			if serial_port in serial_port_list:
+				state = True
 		return state
 
 class SendToSerialCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		text = '%(Send:)s'
+		self.caption = text % stino.cur_language.getTransDict()
+		self.window.show_input_panel(self.caption, '', self.on_done, None, None)
+		
+	def on_done(self, input_text):
+		if input_text:
+			view = self.window.active_view()
+			if stino.smonitor.isMonitorView(view):
+				name = view.name()
+				serial_port = name.split('-')[1].strip()
+				if serial_port in stino.serial_port_in_use_list:
+					serial_monitor = stino.serial_port_monitor_dict[serial_port]
+					serial_monitor.send(input_text)
+					self.window.show_input_panel(self.caption, '', self.on_done, None, None)
 
 	def is_enabled(self):
-		state = True
+		state = False
+		view = self.window.active_view()
+		if stino.smonitor.isMonitorView(view):
+			name = view.name()
+			serial_port = name.split('-')[1].strip()
+			serial_port_list = stino.serial_port_in_use_list
+			if serial_port in serial_port_list:
+				state = True
 		return state
 
 class SelectProgrammerCommand(sublime_plugin.WindowCommand):

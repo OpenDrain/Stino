@@ -46,6 +46,22 @@ def genSerialPortList():
 			serial_port_list += ['/dev/' + f.strip() for f in os.popen(cmd).readlines()]
 	return serial_port_list
 
+def isSerialPortAvailable(serial_port):
+	state = False
+	ser = serial.Serial()
+	ser.port = serial_port
+	try:
+		ser.open()
+	except serial.serialutil.SerialException:
+		pass
+	except UnicodeDecodeError:
+		pass
+	else:
+		if ser.isOpen():
+			state = True
+			ser.close()
+	return state
+
 def isMonitorView(view):
 	state = ''
 	name = view.name()
@@ -84,8 +100,16 @@ class SerialMonitor:
 		self.view = stpanel.MonitorView(self.name)
 		self.is_alive = False
 
+		self.baudrate = int(const.settings.get('baudrate'))
+		
+		self.ser = serial.Serial()
+		self.ser.port = self.serial_port
+		self.ser.baudrate = self.baudrate
+
 	def start(self):
+		self.view.raiseToFront()
 		if not self.is_alive:
+			self.ser.open()
 			self.is_alive = True
 			monitor_thread = threading.Thread(target=self.receive)
 			monitor_thread.start()
@@ -96,8 +120,14 @@ class SerialMonitor:
 
 	def receive(self):
 		while self.is_alive:
-			time.sleep(2)
-			time.sleep(0.1)
+			number = self.ser.inWaiting()
+			if number > 0:
+				in_text = self.ser.read(number)
+				self.view.addText(in_text)
+			time.sleep(0.01)
+		self.ser.close()
 
-	def send(self, text):
-		pass
+	def send(self, out_text):
+		self.ser.write(out_text.encode('utf-8'))
+		self.view.addText(out_text)
+		self.view.addText('\n')
