@@ -201,6 +201,10 @@ def getSketchFolderPath(file_path):
 		folder_path = getSketchFolderPathWithoutSketchbook(file_path)
 	return folder_path
 
+def getSketchNameFromFolder(sketch_folder_path):
+	sketch_name = os.path.split(sketch_folder_path)[1]
+	return sketch_name
+
 def genHeaderListFromSketch(sketch):
 	header_list = []
 	sketch_text = getTextFromSketch(sketch)

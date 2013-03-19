@@ -112,6 +112,10 @@ def openUrl(url):
 	ref_file = '%s/%s.html' % (reference_path, url)
 	sublime.run_command('open_url', {'url': ref_file})
 
+def openUrlList(url_list):
+	for url in url_list:
+		openUrl(url)
+
 def genFileListFromPathList(path_list):
 	file_list = []
 	for cur_path in path_list:
@@ -183,3 +187,8 @@ def openFile(file_path):
 	window = sublime.active_window()
 	window.open_file(file_path)
 
+def findAllFiles(path = '.'):
+	file_path_list = []
+	for (cur_path, sub_dirs, files) in os.walk(path):
+		file_path_list += [os.path.join(cur_path, cur_file) for cur_file in files]
+	return file_path_list

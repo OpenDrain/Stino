@@ -9,7 +9,7 @@ import time
 
 class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 	def run(self, top_path_list, condition_mod, condition_func, function_mod, function_func, \
-		with_files = True, with_button = False):
+		with_files = True, with_button = False, extra_parameter = ''):
 		self.level = 0
 		self.top_path_list = top_path_list
 		self.path_list = top_path_list
@@ -19,6 +19,7 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 		self.function_func = function_func
 		self.with_files = with_files
 		self.with_button = with_button
+		self.extra_parameter = extra_parameter
 
 		file_list = stino.osfile.genFileListFromPathList(self.path_list)
 		self.window.show_quick_panel(file_list, self.on_done)
@@ -29,7 +30,10 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 
 		sel_path = self.path_list[index]
 		if getattr(self.condition_module, self.condition_func)(sel_path):
-			getattr(self.function_module, self.function_func)(sel_path)
+			if self.extra_parameter:
+				getattr(self.function_module, self.function_func)(sel_path, self.extra_parameter)
+			else:
+				getattr(self.function_module, self.function_func)(sel_path)
 		else:		
 			(self.level, self.path_list) = stino.osfile.enterSubDir(self.top_path_list, \
 				self.level, index, sel_path, with_files = self.with_files, with_button = self.with_button)
@@ -232,6 +236,7 @@ class SelectBoardCommand(sublime_plugin.WindowCommand):
 		if platform != pre_platform or board != pre_board:
 			stino.const.settings.set('platform', platform)
 			stino.const.settings.set('board', board)
+			stino.const.settings.set('full_compilation', True)
 			stino.const.save_settings()
 			stino.cur_menu.update()
 
@@ -251,6 +256,7 @@ class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 		pre_item = stino.const.settings.get(type_caption)
 		if not item == pre_item:
 			stino.const.settings.set(type_caption, item)
+			stino.const.settings.set('full_compilation', True)
 			stino.const.save_settings()
 
 	def is_checked(self, menu_str):
@@ -460,15 +466,36 @@ class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 
 class AutoFormatCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		text = 'Parsing C++ source files is difficult and I do not finish it yet.\n'
+		stino.log_panel.addText(text)
 
 class ArchiveSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		filename = self.window.active_view().file_name()
+		if filename:
+			sketch_folder_path = stino.src.getSketchFolderPath(filename)
+			home_root_list = stino.osfile.getHomeRootList()
+			self.window.run_command('show_file_explorer_panel', {'top_path_list':home_root_list, \
+				'condition_mod':'osfile', 'condition_func':'isButtonPress', 'function_mod':'actions', \
+				'function_func':'getArchiveFolderPath', 'with_files': False, 'with_button': True, \
+				'extra_parameter': sketch_folder_path})
 
 class FixEncodingCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		view = self.window.active_view()
+		filename = view.file_name()
+		if filename:
+			state = True
+			if view.is_dirty():
+				text = '%(Discard_All_Changes)s'
+				msg = text % stino.cur_language.getTransDict()
+				state = sublime.ok_cancel_dialog(msg)
+		
+			if state:
+				content = stino.osfile.readFileText(filename)
+				edit = view.begin_edit()
+				view.replace(edit, sublime.Region(0, view.size()), content)
+				view.end_edit(edit)
 
 class SelectExampleCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
@@ -484,13 +511,14 @@ class OpenRefCommand(sublime_plugin.WindowCommand):
 
 class FindInReferenceCommand(sublime_plugin.WindowCommand):
 	def run(self):
+		view = self.window.active_view()
+		selected_text = stino.utils.getSelectedTextFromView(view)
 		platform = stino.const.settings.get('platform')
-		keyword_list = stino.arduino_info.getKeywordList(platform)
-		print platform
-		for keyword in keyword_list:
-			keyword_type = stino.arduino_info.getKeywordType(platform, keyword)
-			keyword_ref = stino.arduino_info.getKeywordRef(platform, keyword)
-			print '%s\t%s\t%s' % (keyword, keyword_type, keyword_ref)
+		keyword_operator_list = stino.arduino_info.getOperatorList(platform)
+		keyword_list = stino.utils.getKeywordListFromText(selected_text, keyword_operator_list)
+		(ref_list, msg_text) = stino.utils.getRefList(keyword_list, stino.arduino_info, platform)
+		stino.osfile.openUrlList(ref_list)
+		stino.log_panel.addText(msg_text)
 
 class AboutStinoCommand(sublime_plugin.WindowCommand):
 	def run(self):

@@ -375,6 +375,7 @@ class Arduino:
 		self.genPlatformLibraryLists()
 		self.genPlatformExampleLists()
 		self.genKeywordList()
+		self.genOperatorList()
 
 	def isReady(self):
 		state = False
@@ -538,6 +539,19 @@ class Arduino:
 			self.platform_keyword_list_dict[platform] = keyword_list
 			self.keyword_type_dict = dict(self.keyword_type_dict, **keyword_type_dict)
 			self.keyword_ref_dict = dict(self.keyword_ref_dict, **keyword_ref_dict)
+
+	def genOperatorList(self):
+		self.platform_operator_list_dict = {}
+		platform_list = self.getPlatformList()
+		for platform in platform_list:
+			operator_list =[]
+			keyword_list = self.getKeywordList(platform)
+			for keyword in keyword_list:
+				keyword_type = self.getKeywordType(platform, keyword)
+				keyword_ref = self.getKeywordRef(platform, keyword)
+				if (not keyword_type) and keyword_ref:
+					operator_list.append(keyword)
+			self.platform_operator_list_dict[platform] = operator_list
 
 	def setArduinoRoot(self, arduino_root):
 		const.settings.set('arduino_root', arduino_root)
@@ -711,6 +725,12 @@ class Arduino:
 		if key in self.keyword_ref_dict:
 			keyword_ref = self.keyword_ref_dict[key]
 		return keyword_ref
+
+	def getOperatorList(self, platform):
+		operator_list = []
+		if platform in self.platform_operator_list_dict:
+			operator_list = self.platform_operator_list_dict[platform]
+		return operator_list
 
 	def getVersion(self):
 		return self.version

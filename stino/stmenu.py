@@ -36,11 +36,7 @@ class STMenu:
 		self.writeCommandsFile()
 
 	def fullUpdate(self):
-		self.genOriginalMenuText()
-		self.genFullMenuText()
-		self.writeMainMenuFile()
-		self.genCommandsText()
-		self.writeCommandsFile()
+		self.update()
 		self.genCompletionsText()
 		self.writeCompletionsFile()
 		self.genSyntaxText()
@@ -269,7 +265,7 @@ class STMenu:
 		osfile.writeFile(self.main_menu_file, menu_text)
 
 	def genSelectItemText(self, caption, command, parent_mod, list_func, parameter1 = '', parameter2 = '', parameter3 = ''):
-		command_text = '    { "caption": "Stino: %s", "command": "select_item", "args": {"command": "%s", "parent_mod": "%s", "list_func": "%s", "parameter1": "%s", "parameter2": "%s", "parameter3": "%s"}},' \
+		command_text = '    { "caption": "Stino: %s", "command": "select_item", "args": {"command": "%s", "parent_mod": "%s", "list_func": "%s", "parameter1": "%s", "parameter2": "%s", "parameter3": "%s"}},\n' \
 			% (caption, command, parent_mod, list_func, parameter1, parameter2, parameter3)
 		return command_text
 
@@ -432,14 +428,15 @@ class STMenu:
 		if self.arduino_info.isReady():
 			platform = self.getPlatform()
 			for keyword in self.arduino_info.getKeywordList(platform):
-				keyword_type = self.arduino_info.getKeywordType(platform, keyword)
-				if keyword_type:
-					if 'LITERAL' in keyword_type:
-						constant_list.append(keyword)
-					elif keyword_type == 'KEYWORD1':
-						keyword_list.append(keyword)
-					else:
-						function_list.append(keyword)
+				if len(keyword) > 1:
+					keyword_type = self.arduino_info.getKeywordType(platform, keyword)
+					if keyword_type:
+						if 'LITERAL' in keyword_type:
+							constant_list.append(keyword)
+						elif keyword_type == 'KEYWORD1':
+							keyword_list.append(keyword)
+						else:
+							function_list.append(keyword)
 
 		text = ''
 		text += self.genDictBlock(constant_list, 'constant.arduino')
