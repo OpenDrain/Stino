@@ -28,13 +28,16 @@ class STMenu:
 		self.syntax_text = ''
 		self.fullUpdate()
 
+	def commandUpdate(self):
+		self.genCommandsText()
+		self.writeCommandsFile()
+
 	def update(self):
 		self.genOriginalMenuText()
 		self.genFullMenuText()
 		self.writeMainMenuFile()
-		self.genCommandsText()
-		self.writeCommandsFile()
-
+		self.commandUpdate()
+		
 	def fullUpdate(self):
 		self.update()
 		self.genCompletionsText()
@@ -372,6 +375,17 @@ class STMenu:
 			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
 		return command_text
 
+	def genToggleCommandText(self, caption, setting_text):
+		state = const.settings.get(setting_text)
+		if state:
+			state_text = '%(OFF)s'
+		else:
+			state_text = '%(ON)s'
+		command = 'toggle_' + setting_text
+		command_caption = '%(Toggle)s ' + caption
+		command_text = '	{ "caption": "Stino: %s %s", "command": "%s" },\n' % (command_caption, state_text, command)
+		return command_text
+
 	def genSelectCommandsText(self):
 		text = self.genOpenSketchCommandText()
 		text += self.genImportLibraryCommandText()
@@ -382,6 +396,10 @@ class STMenu:
 		text += self.genSelectProgrammerCommandText()
 		text += self.genSelectLanguageCommandText()
 		text += self.genSelectExampleCommandText()
+		text += self.genToggleCommandText('%(Full_Compilation)s', 'full_compilation')
+		text += self.genToggleCommandText('%(Show_Verbose_Output)s-%(Compilation)s', 'verbose_compilation')
+		text += self.genToggleCommandText('%(Show_Verbose_Output)s-%(Upload)s', 'verbose_upload')
+		text += self.genToggleCommandText('%(Verify_code_after_upload)s', 'verify_code')
 		return text
 
 	def genCommandsText(self):

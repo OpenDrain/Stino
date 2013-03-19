@@ -429,6 +429,7 @@ class ToggleFullCompilationCommand(sublime_plugin.WindowCommand):
 		full_compilation = not stino.const.settings.get('full_compilation')
 		stino.const.settings.set('full_compilation', full_compilation)
 		stino.const.save_settings()
+		stino.cur_menu.commandUpdate()
 
 	def is_checked(self):
 		state = stino.const.settings.get('full_compilation')
@@ -439,6 +440,7 @@ class ToggleVerboseCompilationCommand(sublime_plugin.WindowCommand):
 		verbose_compilation = not stino.const.settings.get('verbose_compilation')
 		stino.const.settings.set('verbose_compilation', verbose_compilation)
 		stino.const.save_settings()
+		stino.cur_menu.commandUpdate()
 
 	def is_checked(self):
 		state = stino.const.settings.get('verbose_compilation')
@@ -449,6 +451,7 @@ class ToggleVerboseUploadCommand(sublime_plugin.WindowCommand):
 		verbose_upload = not stino.const.settings.get('verbose_upload')
 		stino.const.settings.set('verbose_upload', verbose_upload)
 		stino.const.save_settings()
+		stino.cur_menu.commandUpdate()
 
 	def is_checked(self):
 		state = stino.const.settings.get('verbose_upload')
@@ -459,6 +462,7 @@ class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 		verify_code = not stino.const.settings.get('verify_code')
 		stino.const.settings.set('verify_code', verify_code)
 		stino.const.save_settings()
+		stino.cur_menu.commandUpdate()
 
 	def is_checked(self):
 		state = stino.const.settings.get('verify_code')
