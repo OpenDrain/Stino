@@ -268,6 +268,126 @@ class STMenu:
 		menu_text = self.getFullMneuText() % self.language.getTransDict()
 		osfile.writeFile(self.main_menu_file, menu_text)
 
+	def genSelectItemText(self, caption, command, parent_mod, list_func, parameter1 = '', parameter2 = '', parameter3 = ''):
+		command_text = '    { "caption": "Stino: %s", "command": "select_item", "args": {"command": "%s", "parent_mod": "%s", "list_func": "%s", "parameter1": "%s", "parameter2": "%s", "parameter3": "%s"}},' \
+			% (caption, command, parent_mod, list_func, parameter1, parameter2, parameter3)
+		return command_text
+
+	def genOpenSketchCommandText(self):
+		command_text = ''
+		sketch_list = self.arduino_info.getSketchList()
+		if sketch_list:
+			command_caption = '%(Open_Sketch)s'
+			command = 'open_sketch'
+			parent_mod = 'arduino_info'
+			list_func = 'getSketchList'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func)
+		return command_text
+
+	def genImportLibraryCommandText(self):
+		command_text = ''
+		platform = self.getPlatform()
+		library_lists = self.arduino_info.getLibraryLists(platform)
+		if library_lists:
+			command_caption = '%(Import_Library...)s'
+			command = 'import_library'
+			parent_mod = 'arduino_info'
+			list_func = 'getLibraryLists'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
+		return command_text
+
+	def genSelectBoardCommandText(self):
+		command_text = ''
+		command = 'select_board'
+		parent_mod = 'arduino_info'
+		list_func = 'getBoardLists'
+		platform_list = self.arduino_info.getPlatformList()
+		for platform in platform_list:
+			command_caption = '%(Select)s ' + platform
+			command_text += self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
+		return command_text
+
+	def genSelectBoardTypeCommandText(self):
+		command_text = ''
+		command = 'select_board_type'
+		parent_mod = 'arduino_info'
+		list_func = 'getBoardItemList'
+
+		platform = self.getPlatform()
+		board = self.getBoard()
+		board_type_list = self.arduino_info.getBoardTypeList(platform, board)
+		for board_type in board_type_list:
+			board_type_caption = self.arduino_info.getPlatformTypeCaption(platform, board_type)
+			command_caption = '%(Select)s ' + board_type_caption
+			command_text += self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform, parameter2 = board, parameter3 = board_type)
+		return command_text
+
+	def genSelectSerialPortCommandText(self):
+		command_text = ''
+		serial_port_list = smonitor.genSerialPortList()
+		if serial_port_list:
+			command_caption = '%(Select)s ' + '%(Serial_Port)s'
+			command = 'select_serial_port'
+			parent_mod = 'smonitor'
+			list_func = 'genSerialPortList'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func)
+		return command_text
+
+	def genSelectBaudrateCommandText(self):
+		command_caption = '%(Select)s ' + '%(Baudrate)s'
+		command = 'select_baudrate'
+		parent_mod = 'smonitor'
+		list_func = 'getBaudrateList'
+		command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func)
+		return command_text
+
+	def genSelectProgrammerCommandText(self):
+		command_text = ''
+		platform = self.getPlatform()
+		programmer_lists = self.arduino_info.getProgrammerLists(platform)
+		if programmer_lists:
+			command_caption = '%(Select)s ' + '%(Programmer)s'
+			command = 'select_programmer'
+			parent_mod = 'arduino_info'
+			list_func = 'getProgrammerLists'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
+		return command_text
+
+	def genSelectLanguageCommandText(self):
+		command_text = ''
+		language_list = self.language.getLanguageList()
+		if language_list:
+			command_caption = '%(Select)s ' + '%(Language)s'
+			command = 'select_language'
+			parent_mod = 'cur_language'
+			list_func = 'getLanguageList'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func)
+		return command_text
+
+	def genSelectExampleCommandText(self):
+		command_text = ''
+		platform = self.getPlatform()
+		example_lists = self.arduino_info.getExampleLists(platform)
+		if example_lists:
+			command_caption = '%(Open)s ' + '%(Example)s'
+			command = 'select_example'
+			parent_mod = 'arduino_info'
+			list_func = 'getExampleLists'
+			command_text = self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
+		return command_text
+
+	def genSelectCommandsText(self):
+		text = self.genOpenSketchCommandText()
+		text += self.genImportLibraryCommandText()
+		text += self.genSelectBoardCommandText()
+		text += self.genSelectBoardTypeCommandText()
+		text += self.genSelectSerialPortCommandText()
+		text += self.genSelectBaudrateCommandText()
+		text += self.genSelectProgrammerCommandText()
+		text += self.genSelectLanguageCommandText()
+		text += self.genSelectExampleCommandText()
+		return text
+
 	def genCommandsText(self):
 		temp_filename = 'commands_mini'
 		if self.arduino_info.isReady():
@@ -279,8 +399,9 @@ class STMenu:
 		temp_file_text = osfile.readFileText(temp_file_path)
 
 		if temp_filename == 'commands_full':
-			temp_file_text = temp_file_text.replace('(_$item$_)', '')
-		self.commands_text = temp_file_text % self.language.getTransDict()
+			select_commands_text = self.genSelectCommandsText()
+			temp_file_text = temp_file_text.replace('(_$item$_)', select_commands_text)
+		self.commands_text = temp_file_text
 
 	def writeCommandsFile(self):
 		commands_text = self.getCommandsText() % self.language.getTransDict()

@@ -101,6 +101,13 @@ def getTypeInfoBlock(board_info_block, board_type):
 			info_block.append(line)
 	return info_block
 
+def isLists(lists):
+	state = False
+	if lists:
+		if isinstance(lists[0], list):
+			state = True
+	return state
+
 def simplifyLists(lists):
 	simple_list = []
 	for cur_list in lists:

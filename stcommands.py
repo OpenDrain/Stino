@@ -37,9 +37,21 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 			self.window.show_quick_panel(file_list, self.on_done)
 
 class SelectItemCommand(sublime_plugin.WindowCommand):
-	def run(self, info_list, command):
+	def run(self, command, parent_mod, list_func, parameter1, parameter2, parameter3):
+		parent_mod = getattr(stino, parent_mod) 
+		func = getattr(parent_mod, list_func)
+		self.parameter1 = parameter1
+		self.parameter2 = parameter2
+		self.parameter3 = parameter3
 		self.command = command
-		self.info_list = info_list
+		if self.parameter1 and self.parameter3:
+			self.info_list = func(self.parameter1, self.parameter2, self.parameter3)
+		elif self.parameter1:
+			self.info_list = func(self.parameter1)
+		else:
+			self.info_list = func()
+		if stino.utils.isLists(self.info_list):
+			self.info_list = stino.utils.simplifyLists(self.info_list)
 		self.window.show_quick_panel(self.info_list, self.on_done)
 
 	def on_done(self, index):
@@ -47,7 +59,16 @@ class SelectItemCommand(sublime_plugin.WindowCommand):
 			return
 			
 		sel_item = self.info_list[index]
-		print sel_item
+		if self.parameter1 and self.parameter3:
+			menu_str = stino.utils.genKey(self.parameter2, self.parameter1)
+			menu_str = stino.utils.genKey(self.parameter3, menu_str)
+			menu_str = stino.utils.genKey(sel_item, menu_str)
+		elif self.parameter1:
+			menu_str = stino.utils.genKey(sel_item, self.parameter1)
+		else:
+			menu_str = sel_item
+
+		self.window.run_command(self.command, {'menu_str': menu_str})
 
 class NotEnabledCommand(sublime_plugin.WindowCommand):
 	def is_enabled(self):
