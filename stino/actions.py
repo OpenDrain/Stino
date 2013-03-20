@@ -15,10 +15,10 @@ def changeArduinoRoot(arduino_root):
 
 	if arduino_root != pre_arduino_root:
 		stino.arduino_info.update()
-		stino.cur_menu.fullUpdate()
 		stino.const.settings.set('full_compilation', True)
 		stino.const.save_settings()
-
+		stino.cur_menu.fullUpdate()
+		
 def changeSketchbookRoot(sketchbook_root):
 	sketchbook_root = stino.utils.getInfoFromKey(sketchbook_root)[1]
 	pre_sketchbook_root = stino.const.settings.get('sketchbook_root')

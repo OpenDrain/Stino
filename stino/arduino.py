@@ -92,8 +92,10 @@ def getPlatformFromCoreRoot(core_root):
 	else:
 		cores_path = os.path.join(core_root, 'cores')
 		if os.path.isdir(cores_path):
-			core_root_folder_name = os.path.split(core_root)[1]
-			platform = core_root_folder_name + ' Boards'
+			arduino_path = os.path.join(cores_path, 'arduino')
+			if not os.path.isdir(arduino_path):
+				core_root_folder_name = os.path.split(core_root)[1]
+				platform = core_root_folder_name + ' Boards'
 	return platform
 
 def findCoresPath(core_root_list):
@@ -192,7 +194,7 @@ def parseBoardFile(platform, boards_file_path):
 		type_key = utils.genKey(board_type, platform)
 		type_caption_dict[type_key] = board_type_caption_dict[board_type]
 
-	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name', none_sep = '.menu')
+	board_info_block_list = utils.splitToBlocks(boards_file_body_block, sep = '.name', none_sep = 'menu.')
 	for board_info_block in board_info_block_list:
 		board_name_line = board_info_block[0]
 		(key, board) = utils.getKeyValue(board_name_line)
@@ -677,7 +679,7 @@ class Arduino:
 		file_path = ''
 		key = utils.genKey(programmer, platform)
 		if key in self.programmer_file_dict:
-			file_path = self.programmer_file_dict[programmer]
+			file_path = self.programmer_file_dict[key]
 		return file_path
 
 	def getLibraryLists(self, platform):

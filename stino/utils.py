@@ -1,6 +1,8 @@
 #-*- coding: utf-8 -*-
 # stino/utils.py
 
+import re
+
 info_sep = '$@@$'
 
 def genKey(info, base_info):
@@ -113,3 +115,62 @@ def simplifyLists(lists):
 	for cur_list in lists:
 		simple_list += cur_list
 	return simple_list
+
+def getSelectedTextFromView(view):
+	selected_text = ''
+	region_list = view.sel()
+	for region in region_list:
+		selected_region = view.word(region)
+		selected_text += view.substr(selected_region)
+		selected_text += '\n'
+	return selected_text
+
+def removeRepeatItemFromList(info_list):
+	simple_list = []
+	for item in info_list:
+		if not item in simple_list:
+			simple_list.append(item)
+	return simple_list
+
+def removeWordsFromText(text, word_list):
+	word_list.sort(key = len, reverse = True)
+	for word in word_list:
+		text = text.replace(word, '')
+	text = re.sub(r'\s', '', text)
+	return text
+
+def getWordListFromText(text):
+	pattern_text = r'\b\w+\b'
+	word_list = re.findall(pattern_text, text)
+	return word_list
+
+def getOperatorListFromText(text, word_list, keyword_operator_list):
+	operator_list = []
+	text = removeWordsFromText(text, word_list)
+	for operator in keyword_operator_list:
+		if operator in text:
+			operator_list.append(operator)
+	return operator_list
+
+def getKeywordListFromText(text, keyword_operator_list):
+	word_list = getWordListFromText(text)
+	word_list = removeRepeatItemFromList(word_list)
+	operator_list = getOperatorListFromText(text, word_list, keyword_operator_list)
+	keyword_list = word_list + operator_list
+	return keyword_list
+
+def getRefList(keyword_list, arduino_info, platform):
+	ref_list = []
+	msg_text = ''
+	for keyword in keyword_list:
+		if keyword in arduino_info.getKeywordList(platform):
+			ref = arduino_info.getKeywordRef(platform, keyword)
+			if ref:
+				if ref[0].isupper():
+					if not ref in ref_list:
+						ref_list.append(ref)
+				else:
+					text = '%s: %s\n' % (keyword, ref)
+					msg_text += text
+	return (ref_list, msg_text)
+

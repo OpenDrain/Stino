@@ -12,6 +12,7 @@ import smonitor
 import arduino
 import stmenu
 import actions
+import compilation
 
 log_panel = stpanel.STPanel()
 serial_listener = smonitor.SerialPortListener()

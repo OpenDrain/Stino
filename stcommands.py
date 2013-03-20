@@ -218,7 +218,13 @@ class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 
 class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		self.window.active_view().run_command('save')
+		filename = self.window.active_view().file_name()
+		sketch_folder_path = stino.src.getSketchFolderPath(filename)
+		cur_compilation = stino.compilation.Compilation(stino.arduino_info, sketch_folder_path)
+		cur_compilation.start()
+		if cur_compilation.isDone():
+			self.window.run_command('toggle_full_compilation')
 
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -236,7 +242,7 @@ class SelectBoardCommand(sublime_plugin.WindowCommand):
 		if platform != pre_platform or board != pre_board:
 			stino.const.settings.set('platform', platform)
 			stino.const.settings.set('board', board)
-			stino.const.settings.set('full_compilation', True)
+			self.window.run_command('toggle_full_compilation')
 			stino.const.save_settings()
 			stino.cur_menu.update()
 
@@ -256,7 +262,7 @@ class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 		pre_item = stino.const.settings.get(type_caption)
 		if not item == pre_item:
 			stino.const.settings.set(type_caption, item)
-			stino.const.settings.set('full_compilation', True)
+			self.window.run_command('toggle_full_compilation')
 			stino.const.save_settings()
 
 	def is_checked(self, menu_str):
@@ -371,8 +377,9 @@ class SendToSerialCommand(sublime_plugin.WindowCommand):
 class SelectProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		(programmer, platform) = stino.utils.getInfoFromKey(menu_str)
+		pre_platform = stino.const.settings.get('platform')
 		pre_programmer = stino.const.settings.get('programmer')
-		if platform != pre_platform:
+		if platform != pre_platform or programmer != pre_programmer:
 			stino.const.settings.set('programmer', programmer)
 			stino.const.save_settings()
 
