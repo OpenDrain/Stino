@@ -220,11 +220,12 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		sketch_folder_path = stino.src.getSketchFolderPath(filename)
-		cur_compilation = stino.compilation.Compilation(stino.arduino_info, sketch_folder_path)
+		cur_compilation = stino.compilation.Compilation(stino.arduino_info, filename)
 		cur_compilation.start()
 		if cur_compilation.isDone():
-			self.window.run_command('toggle_full_compilation')
+			stino.const.settings.set('full_compilation', False)
+			stino.const.save_settings()
+			stino.cur_menu.commandUpdate()
 
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -242,7 +243,7 @@ class SelectBoardCommand(sublime_plugin.WindowCommand):
 		if platform != pre_platform or board != pre_board:
 			stino.const.settings.set('platform', platform)
 			stino.const.settings.set('board', board)
-			self.window.run_command('toggle_full_compilation')
+			stino.const.settings.set('full_compilation', True)
 			stino.const.save_settings()
 			stino.cur_menu.update()
 
@@ -262,8 +263,9 @@ class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 		pre_item = stino.const.settings.get(type_caption)
 		if not item == pre_item:
 			stino.const.settings.set(type_caption, item)
-			self.window.run_command('toggle_full_compilation')
+			stino.const.settings.set('full_compilation', True)
 			stino.const.save_settings()
+			stino.cur_menu.commandUpdate()
 
 	def is_checked(self, menu_str):
 		state = False

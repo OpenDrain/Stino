@@ -6,6 +6,7 @@ import threading
 import time
 import os
 import re
+import shutil
 
 from stino import const
 from stino import osfile
@@ -13,6 +14,43 @@ from stino import utils
 from stino import src
 from stino import stpanel
 from stino import arduino
+
+def isWriteAccess(folder_path):
+	state = True
+	filename = 'write_test.stino'
+	file_path = os.path.join(folder_path, filename)
+	try:
+		opened_file = open(file_path, 'w')
+		opened_file.write('test')
+	except IOError:
+		state = False
+	else:
+		opened_file.close()
+		os.remove(file_path)
+	return state
+
+def findSrcFiles(path):
+	file_path_list = []
+	build_folder_path = os.path.join(path, 'build')
+	for (cur_path, sub_dirs, files) in os.walk(path):
+		if build_folder_path in cur_path:
+			continue
+		for cur_file in files:
+			cur_ext = os.path.splitext(cur_file)[1]
+			if cur_ext in src.src_ext_list:
+				cur_file_path = os.path.join(cur_path, cur_file)
+				file_path_list.append(cur_file_path)
+	return file_path_list
+
+def findMainSrcFile(src_path_list):
+	main_src_path = ''
+	main_src_number = 0
+	for src_path in src_path_list:
+		src_text = osfile.readFileText(src_path)
+		if src.isMainSrcText(src_text):
+			main_src_path = src_path
+			main_src_number += 1
+	return (main_src_number, main_src_path)
 
 def getPlatformFilePath(platform, board):
 	platform_file_path = ''
@@ -203,18 +241,19 @@ def regulariseDictValue(info_dict, info_key_list):
 				if key in info_dict:
 					value = info_dict[key]
 				else:
-					print key
 					value = ''
 				info_value = info_value.replace(replace_text, value)
 			info_dict[info_key] = info_value
 	return info_dict
 
 class Compilation:
-	def __init__(self, arduino_info, sketch_folder_path):
+	def __init__(self, arduino_info, file_path):
 		self.arduino_info = arduino_info
-		self.sketch_name = src.getSketchNameFromFolder(sketch_folder_path)
+		self.sketch_folder_path = src.getSketchFolderPath(file_path)
+		self.sketch_name = src.getSketchNameFromFolder(self.sketch_folder_path)
 		compilation_name = 'Compilation_' + self.sketch_name
 		self.output_panel = stpanel.STPanel(compilation_name)
+		self.error_code = 0
 		self.is_finished = False
 
 		self.platform = const.settings.get('platform')
@@ -236,6 +275,7 @@ class Compilation:
 		self.build_path = './build'
 		self.extra_compilation_flags = const.settings.get('extra_flags')
 		self.arduino_root = const.settings.get('arduino_root')
+		self.sketchbook_root = const.settings.get('sketchbook_root')
 		serial_port = const.settings.get('serial_port')
 		variant_path = os.path.join(self.core_root, 'variants')
 		build_system_path = os.path.join(self.core_root, 'system')
@@ -255,11 +295,14 @@ class Compilation:
 		self.base_info_dict['source_file'] = '{source_file}'
 		self.base_info_dict['object_file'] = '{object_file}'
 		self.base_info_dict['object_files'] = '{object_files}'
+		self.base_info_dict['includes'] = '{includes}'
 
 	def isReady(self):
 		state = False
+		self.error_code = 1
 		if self.platform_file_path:
 			state = True
+			self.error_code = 0
 		return state
 
 	def isDone(self):
@@ -267,13 +310,46 @@ class Compilation:
 
 	def start(self):
 		if self.isReady:
-			self.output_panel.addText('Start compiling...')
+			self.output_panel.clear()
+			self.output_panel.addText('Start compiling...\n')
 			compilation_thread = threading.Thread(target=self.compile)
 			compilation_thread.start()
 
 	def compile(self):
-		self.run_preprocess()
+		self.post_compilation_process()
 		sublime.set_timeout(self.run_compile, 0)
+
+	def post_compilation_process(self):
+		self.checkSketchFolderPath()
+		self.info_dict = self.genInfoDict()
+		
+		self.core_src_path_list = self.genCoreSrcPathList()
+		(main_src_number, main_src_path) = self.genMainSrcFileInfo()
+		
+		if main_src_number == 0:
+			self.error_code = 2
+			msg = 'Error: No main source file (containing setup() and loop() functions) was found.\n'
+			self.output_panel.addText(msg)
+		elif main_src_number > 1:
+			self.error_code = 3
+			msg = 'Error: More than one (%d) main source files (containing setup() and loop() functions) were found.\n' % main_src_number
+			self.output_panel.addText(msg)
+		else:
+			pass
+
+	def run_compile(self):
+		self.is_finished = True
+
+	def checkSketchFolderPath(self):
+		if not isWriteAccess(self.sketch_folder_path):
+			temp_path = os.path.join(self.sketchbook_root, 'temp')
+			temp_sketch_path = os.path.join(temp_path, self.sketch_name)
+			if os.path.isfile(temp_sketch_path):
+				os.remove(temp_sketch_path)
+			elif os.path.isdir(temp_sketch_path):
+				shutil.rmtree(temp_sketch_path)
+			shutil.copytree(self.sketch_folder_path, temp_sketch_path, True)
+			self.sketch_folder_path = temp_sketch_path
 
 	def genInfoDict(self):
 		(board_info_key_list, board_info_dict) = self.genBoardInfo()
@@ -298,16 +374,6 @@ class Compilation:
 		info_dict = regulariseDictValue(info_dict, info_key_list)
 		return info_dict
 
-	def run_preprocess(self):
-		self.info_dict = self.genInfoDict()
-		for key in self.info_dict:
-			if 'pattern' in key:
-				print key
-				print self.info_dict[key]
-
-	def run_compile(self):
-		self.is_finished = True
-
 	def genBoardInfo(self):
 		board_file_path = self.arduino_info.getBoardFile(self.platform, self.board)
 		board_info_dict = parseBoradInfo(board_file_path, self.board, self.board_type_value_dict)
@@ -322,8 +388,21 @@ class Compilation:
 		platform_info_dict = parsePlatformInfo(self.platform_file_path)
 		return platform_info_dict
 
-	
+	def genSketchSrcPathList(self):
+		os.chdir(self.sketch_folder_path)
+		sketch_src_path_list = findSrcFiles('.')
+		return sketch_src_path_list
 
+	def genCoreSrcPathList(self):
+		core_folder = self.info_dict['build.core']
+		core_folder_path = os.path.join(self.cores_path, core_folder)
+		core_src_path_list = findSrcFiles(core_folder_path)
+		return core_src_path_list
+
+	def genMainSrcFileInfo(self):
+		self.sketch_src_path_list = self.genSketchSrcPathList()
+		os.chdir(self.sketch_folder_path)
+		(main_src_number, main_src_path) = findMainSrcFile(self.sketch_src_path_list)
+		return (main_src_number, main_src_path)
 	
-		
 	

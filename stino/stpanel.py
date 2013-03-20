@@ -48,6 +48,11 @@ class STPanel:
 			panel_name = 'output.' + self.name
 			window.run_command("show_panel", {"panel": panel_name})
 
+	def clear(self):
+		panel_edit = self.panel.begin_edit()
+		self.panel.replace(panel_edit, sublime.Region(0, self.panel.size()), '')
+		self.panel.end_edit(panel_edit)
+
 class MonitorView:
 	def __init__(self, name = 'Serial Monitor - Serial Port'):
 		self.name = name
