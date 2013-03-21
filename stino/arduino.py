@@ -694,6 +694,16 @@ class Arduino:
 			path = self.library_path_dict[key]
 		return path
 
+	def getLibraryPathList(self, platform):
+		library_lists = self.getLibraryLists(platform)
+		library_path_list = []
+		for library_list in library_lists:
+			for library in library_list:
+				library_path = self.getLibraryPath(platform, library)
+				if not library_path in library_path_list:
+					library_path_list.append(library_path)
+		return library_path_list
+
 	def getExampleLists(self, platform):
 		example_lists = []
 		if platform in self.platform_list:

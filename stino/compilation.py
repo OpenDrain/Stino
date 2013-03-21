@@ -14,6 +14,23 @@ from stino import src
 from stino import stpanel
 from stino import arduino
 
+ram_size_dict = {}
+ram_size_dict['attiny44'] = '256'
+ram_size_dict['attiny45'] = '256'
+ram_size_dict['attiny84'] = '512'
+ram_size_dict['attiny85'] = '512'
+ram_size_dict['atmega8'] = '1024'
+ram_size_dict['atmega168'] = '1024'
+ram_size_dict['atmega328p'] = '1024'
+ram_size_dict['atmega1280'] = '4096'
+ram_size_dict['atmega2560'] = '8196'
+ram_size_dict['atmega32u4'] = '2560'
+ram_size_dict['at90usb162'] = '512'
+ram_size_dict['at90usb646'] = '4096'
+ram_size_dict['at90usb1286'] = '8192'
+ram_size_dict['cortex-m3'] = '98304'
+ram_size_dict['cortex-m4'] = '16384'
+
 def isWriteAccess(folder_path):
 	state = True
 	filename = 'write_test.stino'
@@ -30,14 +47,12 @@ def isWriteAccess(folder_path):
 
 def findSrcFiles(path):
 	file_path_list = []
-	build_folder_path = os.path.join(path, 'build')
 	for (cur_path, sub_dirs, files) in os.walk(path):
-		if build_folder_path in cur_path:
-			continue
 		for cur_file in files:
 			cur_ext = os.path.splitext(cur_file)[1]
 			if cur_ext in src.src_ext_list:
 				cur_file_path = os.path.join(cur_path, cur_file)
+				cur_file_path = cur_file_path.replace(os.path.sep, '/')
 				file_path_list.append(cur_file_path)
 	return file_path_list
 
@@ -271,14 +286,23 @@ class Compilation:
 			board_type_caption = self.arduino_info.getPlatformTypeCaption(self.platform, board_type)
 			self.board_type_value_dict[board_type] = const.settings.get(board_type_caption)
 
+		self.full_compilation = const.settings.get('full_compilation')
+		self.verbose_compilation = const.settings.get('verbose_compilation')
+		self.verbose_upload = const.settings.get('verbose_upload')
+		self.verify_code = const.settings.get('verify_code')
+
 		self.extra_compilation_flags = const.settings.get('extra_flags')
-		self.arduino_root = const.settings.get('arduino_root')
+		self.arduino_root = self.arduino_info.getArduinoRoot()
 		self.sketchbook_root = const.settings.get('sketchbook_root')
 		serial_port = const.settings.get('serial_port')
 		variant_path = os.path.join(self.core_root, 'variants')
 		build_system_path = os.path.join(self.core_root, 'system')
 		arduino_version = self.arduino_info.getVersion()
 		
+		self.cores_path = self.cores_path.replace(os.path.sep, '/')
+		self.core_root = self.core_root.replace(os.path.sep, '/')
+		self.arduino_root = self.arduino_root.replace(os.path.sep, '/')
+
 		self.base_info_dict = {}
 		self.base_info_dict['runtime.ide.path'] = self.arduino_root
 		self.base_info_dict['build.project_name'] = self.sketch_name
@@ -317,21 +341,22 @@ class Compilation:
 		sublime.set_timeout(self.run_compile, 0)
 
 	def post_compilation_process(self):
-		(main_src_number, main_src_path) = self.genMainSrcFileInfo()
+		(main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
 		if main_src_number == 0:
 			self.error_code = 2
-			msg = 'Error: No main source file (containing setup() and loop() functions) was found.\n'
+			msg = 'Error: No main source file was found. A main source file should contain setup() and loop() functions.\n'
 			self.output_panel.addText(msg)
 		elif main_src_number > 1:
 			self.error_code = 3
-			msg = 'Error: More than one (%d) main source files (containing setup() and loop() functions) were found.\n' % main_src_number
+			msg = 'Error: More than one (%d) main source files were found. A main source file contains setup() and loop() functions.\n' % main_src_number
 			self.output_panel.addText(msg)
 		else:
 			self.checkBuildPath()
 			self.info_dict = self.genInfoDict()
 			self.core_src_path_list = self.genCoreSrcPathList()
-			self.genHeaderList()
-
+			self.completeCompilePattern()
+			self.genBuildMainSrcFile()
+			self.genCompilationCommandList()
 
 	def run_compile(self):
 		if self.error_code == 0:
@@ -340,6 +365,7 @@ class Compilation:
 	def checkBuildPath(self):
 		self.build_path = os.path.join(self.sketchbook_root, 'build')
 		self.build_path = os.path.join(self.build_path, self.sketch_name)
+		self.build_path =self.build_path.replace(os.path.sep, '/')
 		self.base_info_dict['build.path'] = self.build_path
 		if os.path.isfile(self.build_path):
 			os.remove(self.build_path)
@@ -362,9 +388,40 @@ class Compilation:
 		info_dict['compiler.cpp.flags'] += ' '
 		info_dict['compiler.cpp.flags'] += self.extra_compilation_flags
 
+		info_dict['compiler.ino.flags'] = info_dict['compiler.cpp.flags'] + ' -x c++'
+		info_dict['recipe.ino.o.pattern'] = info_dict['recipe.cpp.o.pattern'].replace('compiler.cpp.flags', 'compiler.ino.flags')
+		info_key_list.append('compiler.ino.flags')
+		info_key_list.append('recipe.ino.o.pattern')
+
 		if not 'compiler.path' in info_dict:
-			compiler_path = os.path.join(self.arduino_root, '/tools/avr/bin')
+			compiler_path = os.path.join(self.arduino_root, 'tools/avr/bin/')
+			compiler_path = compiler_path.replace(os.path.sep, '/')
 			info_dict['compiler.path'] = compiler_path
+
+		if 'teensy' in self.platform:
+			if 'build.elide_constructors' in info_dict:
+				if info_dict['build.elide_constructors'] == 'true':
+					info_dict['build.elide_constructors'] = '-felide-constructors'
+				else:
+					info_dict['build.elide_constructors'] = ''
+			if 'build.mcu' in info_dict:
+				info_dict['build.mcu'] = info_dict['build.cpu']
+			if 'build.gnu0x' in info_dict:
+				if info_dict['build.gnu0x'] == 'true':
+					info_dict['build.gnu0x'] = '-std=gnu++0x'
+				else:
+					info_dict['build.gnu0x'] = ''
+			if 'build.cpp0x' in info_dict:
+				if info_dict['build.cpp0x'] == 'true':
+					info_dict['build.cpp0x'] = '-std=c++0x'
+				else:
+					info_dict['build.cpp0x'] = ''
+
+		if not 'upload.maximum_ram_size' in info_dict:
+			if info_dict['build.mcu'] in ram_size_dict:
+				info_dict['upload.maximum_ram_size'] = ram_size_dict[info_dict['build.mcu']]
+			else:
+				info_dict['upload.maximum_ram_size'] = 'unknown'
 
 		info_dict = regulariseDictValue(info_dict, info_key_list)
 		return info_dict
@@ -390,8 +447,9 @@ class Compilation:
 
 	def genCoreSrcPathList(self):
 		core_folder = self.info_dict['build.core']
-		core_folder_path = os.path.join(self.cores_path, core_folder)
-		core_src_path_list = findSrcFiles(core_folder_path)
+		self.core_folder_path = os.path.join(self.cores_path, core_folder)
+		self.core_folder_path = self.core_folder_path.replace(os.path.sep, '/')
+		core_src_path_list = findSrcFiles(self.core_folder_path)
 		return core_src_path_list
 
 	def genMainSrcFileInfo(self):
@@ -401,9 +459,106 @@ class Compilation:
 		return (main_src_number, main_src_path)
 
 	def genHeaderList(self):
+		src_header_list = []
 		os.chdir(self.sketch_folder_path)
 		for sketch_src_path in self.sketch_src_path_list:
 			src_text = osfile.readFileText(sketch_src_path)
 			header_list = src.genHeaderListFromSketchText(src_text)
-			print header_list
-	
+			src_header_list += header_list
+		src_header_list = utils.removeRepeatItemFromList(src_header_list)
+		self.src_header_list = src_header_list
+
+	def genIncludeLibraryPath(self):
+		self.genHeaderList()
+
+		include_library_path_list = ['.', self.core_folder_path]
+		if 'build.variant' in self.info_dict:
+			variant_folder = self.info_dict['build.variant']
+			variant_folder_path = os.path.join(self.core_root, variant_folder)
+			variant_folder_path = variant_folder_path.replace(os.path.sep, '/')
+			include_library_path_list.append(variant_folder_path)
+
+		library_path_list = self.arduino_info.getLibraryPathList(self.platform)
+		for library_path in library_path_list:
+			header_list_from_library = src.getHeaderListFromFolder(library_path)
+			for header in header_list_from_library:
+				if header in self.src_header_list:
+					library_path = library_path.replace(os.path.sep, '/')
+					include_library_path_list.append(library_path)
+					break
+		self.include_library_path_list = include_library_path_list
+
+	def genIncludesText(self):
+		self.genIncludeLibraryPath()
+		includes_text = ''
+		for include_library_path in self.include_library_path_list:
+			includes_text += '"-I%s" ' % include_library_path
+		includes_text = includes_text[:-1]
+		self.includes_text = includes_text
+
+	def completeCompilePattern(self):
+		self.genIncludesText()
+		ext_list = ['c', 'cpp', 'ino']
+		for ext in ext_list:
+			pattern = 'recipe.%s.o.pattern' % ext
+			command = self.info_dict[pattern]
+			command = command.replace('{includes}', self.includes_text)
+			self.info_dict[pattern] = command
+
+	def genBuildMainSrcFile(self):
+		filename = os.path.split(self.main_src_path)[1]
+		filename += '.cpp'
+		self.build_main_src_path = os.path.join(self.build_path, filename)
+		self.build_main_src_path = self.build_main_src_path.replace(os.path.sep, '/')
+		sketch_text = osfile.readFileText(self.main_src_path)
+		simple_sketch_text = src.genSimpleSrcText(sketch_text)
+		declaration_list = src.genSrcDeclarationList(simple_sketch_text)
+		function_list = src.genSrcFunctionList(simple_sketch_text)
+		function_list.remove('void setup ()')
+		function_list.remove('void loop ()')
+		
+		new_declaration_list = []
+		for function in function_list:
+			if not function in declaration_list:
+				if not function in new_declaration_list:
+					new_declaration_list.append(function)
+
+		header_text = '#include <Arduino.h>\n'
+		for declaration in new_declaration_list:
+			header_text += declaration
+			header_text += ';\n'
+
+		build_src_text = header_text + sketch_text
+		osfile.writeFile(self.build_main_src_path, build_src_text)
+
+		self.sketch_src_path_list.remove(self.main_src_path)
+		self.sketch_src_path_list.insert(0, self.build_main_src_path)
+
+	def genSrcCompilationCommandInfo(self, src_path_list):
+		command_list = []
+		obj_path_list = []
+		for src_path in src_path_list:
+			filename = os.path.split(src_path)[1]
+			filename += '.o'
+			obj_path = os.path.join(self.build_path, filename)
+			obj_path = obj_path.replace(os.path.sep, '/')
+			obj_path_list.append(obj_path)
+			src_ext = os.path.splitext(src_path)[1]
+			if src_ext in ['.c', '.cc']:
+				pattern = 'recipe.c.o.pattern'
+			elif src_ext in ['.cpp', '.cxx']:
+				pattern = 'recipe.cpp.o.pattern'
+			elif src_ext in ['.ino', '.pde']:
+				pattern = 'recipe.ino.o.pattern'
+			command_text = self.info_dict[pattern]
+			command_text = command_text.replace('{source_file}', src_path)
+			command_text = command_text.replace('{object_file}', obj_path)
+			command_list.append(command_text)
+		return (obj_path_list, command_list)
+
+	def genCompilationCommandList(self):
+		self.src_path_list = self.sketch_src_path_list + self.core_src_path_list
+		(self.core_obj_path_list, core_command_list) = self.genSrcCompilationCommandInfo(self.core_src_path_list)
+		print core_command_list
+		(self.sketch_obj_path_list, sketch_command_list) = self.genSrcCompilationCommandInfo(self.sketch_src_path_list)
+		print sketch_command_list
