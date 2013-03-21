@@ -205,9 +205,8 @@ def getSketchNameFromFolder(sketch_folder_path):
 	sketch_name = os.path.split(sketch_folder_path)[1]
 	return sketch_name
 
-def genHeaderListFromSketch(sketch):
+def genHeaderListFromSketchText(sketch_text):
 	header_list = []
-	sketch_text = getTextFromSketch(sketch)
 	simple_src_text = genSimpleSrcText(sketch_text)
 	pattern_text = r'#include\s+["<]\S+?[>"]'
 	include_header_list = re.findall(pattern_text, simple_src_text)
@@ -215,6 +214,11 @@ def genHeaderListFromSketch(sketch):
 		header = include_header.replace('#include', '').strip()
 		header = header[1:-1]
 		header_list.append(header)
+	return header_list
+
+def genHeaderListFromSketch(sketch):
+	sketch_text = getTextFromSketch(sketch)
+	header_list = genHeaderListFromSketchText(sketch_text)
 	return header_list
 
 def getHeaderListFromFolder(folder_path):
@@ -253,24 +257,34 @@ def insertLibraries(folder_path, view):
 	view.end_edit(edit)
 
 def openExample(path):
-	folder_name = os.path.split(path)[1]
-	sketchbook_root = const.settings.get('sketchbook_root')
-	des_path = os.path.join(sketchbook_root, 'temp')
-	des_path = os.path.join(des_path, folder_name)
-	
-	number = 0
-	new_des_path = des_path
-	while os.path.exists(new_des_path):
-		number += 1
-		new_des_path = des_path + ('_%d' % number)
-	des_path = new_des_path
-	
-	shutil.copytree(path, des_path, True)
 	sublime.run_command('new_window')
 	window = sublime.windows()[-1]
-	file_list = osfile.listDir(des_path, with_dirs = False)
+	file_list = osfile.listDir(path, with_dirs = False)
 	for cur_file in file_list:
 		cur_file_ext = os.path.splitext(cur_file)[1]
 		if cur_file_ext in src_ext_list:
-			cur_file_path = os.path.join(des_path, cur_file)
+			cur_file_path = os.path.join(path, cur_file)
 			window.open_file(cur_file_path)
+
+# def openExample(path):
+# 	folder_name = os.path.split(path)[1]
+# 	sketchbook_root = const.settings.get('sketchbook_root')
+# 	des_path = os.path.join(sketchbook_root, 'temp')
+# 	des_path = os.path.join(des_path, folder_name)
+	
+# 	number = 0
+# 	new_des_path = des_path
+# 	while os.path.exists(new_des_path):
+# 		number += 1
+# 		new_des_path = des_path + ('_%d' % number)
+# 	des_path = new_des_path
+	
+# 	shutil.copytree(path, des_path, True)
+# 	sublime.run_command('new_window')
+# 	window = sublime.windows()[-1]
+# 	file_list = osfile.listDir(des_path, with_dirs = False)
+# 	for cur_file in file_list:
+# 		cur_file_ext = os.path.splitext(cur_file)[1]
+# 		if cur_file_ext in src_ext_list:
+# 			cur_file_path = os.path.join(des_path, cur_file)
+# 			window.open_file(cur_file_path)

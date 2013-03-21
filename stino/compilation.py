@@ -6,7 +6,6 @@ import threading
 import time
 import os
 import re
-import shutil
 
 from stino import const
 from stino import osfile
@@ -272,7 +271,6 @@ class Compilation:
 			board_type_caption = self.arduino_info.getPlatformTypeCaption(self.platform, board_type)
 			self.board_type_value_dict[board_type] = const.settings.get(board_type_caption)
 
-		self.build_path = './build'
 		self.extra_compilation_flags = const.settings.get('extra_flags')
 		self.arduino_root = const.settings.get('arduino_root')
 		self.sketchbook_root = const.settings.get('sketchbook_root')
@@ -289,7 +287,6 @@ class Compilation:
 		self.base_info_dict['archive_file'] = 'core.a'
 		self.base_info_dict['build.variant.path'] = variant_path
 		self.base_info_dict['build.system.path'] = build_system_path
-		self.base_info_dict['build.path'] = self.build_path
 		self.base_info_dict['software'] = 'ARDUINO'
 		self.base_info_dict['runtime.ide.version'] = '%d' % arduino_version
 		self.base_info_dict['source_file'] = '{source_file}'
@@ -320,12 +317,7 @@ class Compilation:
 		sublime.set_timeout(self.run_compile, 0)
 
 	def post_compilation_process(self):
-		self.checkSketchFolderPath()
-		self.info_dict = self.genInfoDict()
-		
-		self.core_src_path_list = self.genCoreSrcPathList()
 		(main_src_number, main_src_path) = self.genMainSrcFileInfo()
-		
 		if main_src_number == 0:
 			self.error_code = 2
 			msg = 'Error: No main source file (containing setup() and loop() functions) was found.\n'
@@ -335,21 +327,24 @@ class Compilation:
 			msg = 'Error: More than one (%d) main source files (containing setup() and loop() functions) were found.\n' % main_src_number
 			self.output_panel.addText(msg)
 		else:
-			pass
+			self.checkBuildPath()
+			self.info_dict = self.genInfoDict()
+			self.core_src_path_list = self.genCoreSrcPathList()
+			self.genHeaderList()
+
 
 	def run_compile(self):
-		self.is_finished = True
+		if self.error_code == 0:
+			self.is_finished = True
 
-	def checkSketchFolderPath(self):
-		if not isWriteAccess(self.sketch_folder_path):
-			temp_path = os.path.join(self.sketchbook_root, 'temp')
-			temp_sketch_path = os.path.join(temp_path, self.sketch_name)
-			if os.path.isfile(temp_sketch_path):
-				os.remove(temp_sketch_path)
-			elif os.path.isdir(temp_sketch_path):
-				shutil.rmtree(temp_sketch_path)
-			shutil.copytree(self.sketch_folder_path, temp_sketch_path, True)
-			self.sketch_folder_path = temp_sketch_path
+	def checkBuildPath(self):
+		self.build_path = os.path.join(self.sketchbook_root, 'build')
+		self.build_path = os.path.join(self.build_path, self.sketch_name)
+		self.base_info_dict['build.path'] = self.build_path
+		if os.path.isfile(self.build_path):
+			os.remove(self.build_path)
+		if not os.path.exists(self.build_path):
+			os.makedirs(self.build_path)
 
 	def genInfoDict(self):
 		(board_info_key_list, board_info_dict) = self.genBoardInfo()
@@ -404,5 +399,11 @@ class Compilation:
 		os.chdir(self.sketch_folder_path)
 		(main_src_number, main_src_path) = findMainSrcFile(self.sketch_src_path_list)
 		return (main_src_number, main_src_path)
-	
+
+	def genHeaderList(self):
+		os.chdir(self.sketch_folder_path)
+		for sketch_src_path in self.sketch_src_path_list:
+			src_text = osfile.readFileText(sketch_src_path)
+			header_list = src.genHeaderListFromSketchText(src_text)
+			print header_list
 	

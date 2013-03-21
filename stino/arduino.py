@@ -581,11 +581,10 @@ class Arduino:
 		const.save_settings()
 		libraries_path = os.path.join(sketchbook_root, 'libraries')
 		hardware_path = os.path.join(sketchbook_root, 'hardware')
-		temp_path = os.path.join(sketchbook_root, 'temp')
-		path_list = [sketchbook_root, libraries_path, hardware_path, temp_path]
+		path_list = [sketchbook_root, libraries_path, hardware_path]
 		for path in path_list:
 			if not os.path.exists(path):
-				os.mkdir(path)
+				os.makedirs(path)
 
 	def getSketchbookRoot(self):
 		sketchbook_root = const.settings.get('sketchbook_root')
