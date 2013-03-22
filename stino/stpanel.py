@@ -53,6 +53,9 @@ class STPanel:
 		self.panel.replace(panel_edit, sublime.Region(0, self.panel.size()), '')
 		self.panel.end_edit(panel_edit)
 
+	def toggleWordWrap(self):
+		self.panel.run_command('toggle_setting', {'setting': 'word_wrap'})
+
 class MonitorView:
 	def __init__(self, name = 'Serial Monitor - Serial Port'):
 		self.name = name
@@ -108,3 +111,6 @@ class MonitorView:
 
 	def raiseToFront(self):
 		self.window.focus_view(self.view)
+
+	def toggleWordWrap(self):
+		self.view.run_command('toggle_setting', {'setting': 'word_wrap'})

@@ -6,6 +6,7 @@ import threading
 import time
 import os
 import re
+import subprocess
 
 from stino import const
 from stino import osfile
@@ -261,12 +262,14 @@ def regulariseDictValue(info_dict, info_key_list):
 	return info_dict
 
 class Compilation:
-	def __init__(self, arduino_info, file_path):
+	def __init__(self, language, arduino_info, file_path):
+		self.language = language
 		self.arduino_info = arduino_info
 		self.sketch_folder_path = src.getSketchFolderPath(file_path)
 		self.sketch_name = src.getSketchNameFromFolder(self.sketch_folder_path)
 		compilation_name = 'Compilation_' + self.sketch_name
 		self.output_panel = stpanel.STPanel(compilation_name)
+		self.output_panel.toggleWordWrap()
 		self.error_code = 0
 		self.is_finished = False
 
@@ -298,6 +301,7 @@ class Compilation:
 		variant_path = os.path.join(self.core_root, 'variants')
 		build_system_path = os.path.join(self.core_root, 'system')
 		arduino_version = self.arduino_info.getVersion()
+		self.archive_file = 'core.a'
 		
 		self.cores_path = self.cores_path.replace(os.path.sep, '/')
 		self.core_root = self.core_root.replace(os.path.sep, '/')
@@ -308,7 +312,7 @@ class Compilation:
 		self.base_info_dict['build.project_name'] = self.sketch_name
 		self.base_info_dict['serial.port'] = serial_port
 		self.base_info_dict['serial.port.file'] = serial_port
-		self.base_info_dict['archive_file'] = 'core.a'
+		self.base_info_dict['archive_file'] = self.archive_file
 		self.base_info_dict['build.variant.path'] = variant_path
 		self.base_info_dict['build.system.path'] = build_system_path
 		self.base_info_dict['software'] = 'ARDUINO'
@@ -337,10 +341,10 @@ class Compilation:
 			compilation_thread.start()
 
 	def compile(self):
-		self.post_compilation_process()
-		sublime.set_timeout(self.run_compile, 0)
+		self.postCompilationProcess()
+		self.runCompile()
 
-	def post_compilation_process(self):
+	def postCompilationProcess(self):
 		(main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
 		if main_src_number == 0:
 			self.error_code = 2
@@ -358,8 +362,10 @@ class Compilation:
 			self.genBuildMainSrcFile()
 			self.genCompilationCommandList()
 
-	def run_compile(self):
+	def runCompile(self):
 		if self.error_code == 0:
+			self.cleanObjFiles()
+			self.runCompilationCommands()
 			self.is_finished = True
 
 	def checkBuildPath(self):
@@ -543,6 +549,11 @@ class Compilation:
 			obj_path = os.path.join(self.build_path, filename)
 			obj_path = obj_path.replace(os.path.sep, '/')
 			obj_path_list.append(obj_path)
+
+			command_text = '@echo "%s %s..."' % ('%(Creating)s', obj_path)
+			command_text = command_text % self.language.getTransDict()
+			command_list.append(command_text)
+
 			src_ext = os.path.splitext(src_path)[1]
 			if src_ext in ['.c', '.cc']:
 				pattern = 'recipe.c.o.pattern'
@@ -556,9 +567,143 @@ class Compilation:
 			command_list.append(command_text)
 		return (obj_path_list, command_list)
 
+	def genArCommandList(self, core_obj_path_list):
+		command_list = []
+		ar_file_path = self.build_path + '/' + self.archive_file
+		command_text = '@echo "%s %s..."' % ('%(Creating)s', ar_file_path)
+		command_text = command_text % self.language.getTransDict()
+		command_list.append(command_text)
+
+		pattern = 'recipe.ar.pattern'
+		command_text_pattern = self.info_dict[pattern]
+		for core_obj_path in core_obj_path_list:
+			command_text = command_text_pattern.replace('{object_file}', core_obj_path)
+			command_list.append(command_text)
+		return command_list
+
+	def genElfCommandList(self, sketch_obj_path_list):
+		command_list = []
+		elf_file_path = self.build_path + '/' + self.sketch_name + '.elf'
+		command_text = '@echo "%s %s..."' % ('%(Creating)s', elf_file_path)
+		command_text = command_text % self.language.getTransDict()
+		command_list.append(command_text)
+
+		object_files = ''
+		for sketch_obj_path in sketch_obj_path_list:
+			object_files += '"%s" ' % sketch_obj_path
+		object_files = object_files[:-1]
+
+		pattern = 'recipe.c.combine.pattern'
+		command_text = self.info_dict[pattern]
+		command_text = command_text.replace('{object_files}', object_files)
+		command_list.append(command_text)
+		return command_list
+
+	def genEepCommandList(self):
+		command_list = []
+		eep_file_path = self.build_path + '/' + self.sketch_name + '.eep'
+		command_text = '@echo "%s %s..."' % ('%(Creating)s', eep_file_path)
+		command_text = command_text % self.language.getTransDict()
+		command_list.append(command_text)
+
+		pattern = 'recipe.objcopy.eep.pattern'
+		command_text = self.info_dict[pattern]
+		command_list.append(command_text)
+		return command_list
+
+	def genHexCommandList(self):
+		command_list = []
+
+		pattern = 'recipe.objcopy.hex.pattern'
+		command_text = self.info_dict[pattern]
+		ext = command_text[-5:-1]
+
+		hex_file_path = self.build_path + '/' + self.sketch_name + ext
+		command_text = '@echo "%s %s..."' % ('%(Creating)s', hex_file_path)
+		command_text = command_text % self.language.getTransDict()
+		command_list.append(command_text)
+
+		pattern = 'recipe.objcopy.hex.pattern'
+		command_text = self.info_dict[pattern]
+		command_list.append(command_text)
+		return command_list
+
+	def genSizeCommandList(self):
+		command_list = []
+
+		pattern = 'recipe.size.pattern'
+		command_text = self.info_dict[pattern]
+		command_text = command_text.replace('-A', '')
+		command_text = command_text.replace('.hex', '.elf')
+		command_list.append(command_text)
+		return command_list
+
 	def genCompilationCommandList(self):
-		self.src_path_list = self.sketch_src_path_list + self.core_src_path_list
-		(self.core_obj_path_list, core_command_list) = self.genSrcCompilationCommandInfo(self.core_src_path_list)
-		print core_command_list
 		(self.sketch_obj_path_list, sketch_command_list) = self.genSrcCompilationCommandInfo(self.sketch_src_path_list)
-		print sketch_command_list
+		(self.core_obj_path_list, core_command_list) = self.genSrcCompilationCommandInfo(self.core_src_path_list)
+		ar_command_list = self.genArCommandList(self.core_obj_path_list)
+		elf_command_list = self.genElfCommandList(self.sketch_obj_path_list)
+		eep_command_list = self.genEepCommandList()
+		hex_command_list = self.genHexCommandList()
+		size_command_list = self.genSizeCommandList()
+
+		self.compilation_command_list = []
+		self.compilation_command_list += sketch_command_list
+		if self.full_compilation:
+			self.compilation_command_list += core_command_list
+			self.compilation_command_list += ar_command_list
+		self.compilation_command_list += elf_command_list
+		if self.info_dict['recipe.objcopy.eep.pattern']:
+			self.compilation_command_list += eep_command_list
+		self.compilation_command_list += hex_command_list
+		self.compilation_command_list += size_command_list
+
+	def cleanObjFiles(self):
+		text = '%(Cleaning)s...\n' % self.language.getTransDict()
+		self.output_panel.addText(text)
+		ar_file_path = self.build_path + '/' + self.archive_file
+		elf_file_path = self.build_path + '/' + self.sketch_name + '.elf'
+		eep_file_path = self.build_path + '/' + self.sketch_name + '.eep'
+		pattern = 'recipe.objcopy.hex.pattern'
+		command_text = self.info_dict[pattern]
+		ext = command_text[-5:-1]
+		hex_file_path = self.build_path + '/' + self.sketch_name + ext
+		file_path_list = []
+		if self.full_compilation:
+			for core_obj_path in self.core_obj_path_list:
+				file_path_list.append(core_obj_path)
+			file_path_list.append(ar_file_path)
+		for sketch_obj_path in self.sketch_obj_path_list:
+			file_path_list.append(sketch_obj_path)
+		file_path_list.append(elf_file_path)
+		if self.info_dict['recipe.objcopy.eep.pattern']:
+			file_path_list.append(eep_file_path)
+		file_path_list.append(hex_file_path)
+
+		for file_path in file_path_list:
+			if os.path.isfile(file_path):
+				os.remove(file_path)
+
+	def runCompilationCommands(self):
+		os.chdir(self.sketch_folder_path)
+		for compilation_command in self.compilation_command_list:
+			if const.sys_platform == 'windows':
+				compilation_command = compilation_command.replace('/', os.path.sep)
+
+			self.output_panel.addText(compilation_command)
+			self.output_panel.addText('\n')
+
+			compilation_process = subprocess.Popen(compilation_command, stdout = subprocess.PIPE, \
+				stderr = subprocess.PIPE, shell = True)
+			
+			result = compilation_process.communicate()
+			stdout = result[0]
+			stderr = result[1]
+						
+			if stdout:
+				self.output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
+			if stderr:
+				self.output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
+
+
+			

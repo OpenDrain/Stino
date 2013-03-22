@@ -220,7 +220,7 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_compilation = stino.compilation.Compilation(stino.arduino_info, filename)
+		cur_compilation = stino.compilation.Compilation(stino.cur_language, stino.arduino_info, filename)
 		cur_compilation.start()
 		if cur_compilation.isDone():
 			stino.const.settings.set('full_compilation', False)

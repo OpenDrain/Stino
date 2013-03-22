@@ -98,6 +98,7 @@ class SerialMonitor:
 		self.serial_port = serial_port
 		self.name = 'Serial Monitor - ' + self.serial_port
 		self.view = stpanel.MonitorView(self.name)
+		self.view.toggleWordWrap()
 		self.is_alive = False
 
 		self.baudrate = int(const.settings.get('baudrate'))
