@@ -562,12 +562,13 @@ class Arduino:
 	def getArduinoRoot(self):
 		arduino_root = const.settings.get('arduino_root')
 		if not isArduinoRoot(arduino_root):
-			arduino_root = self.getDefaultArduinoRoot(self)
+			arduino_root = self.getDefaultArduinoRoot()
 		if arduino_root:
 			arduino_root = osfile.getRealPath(arduino_root)
 		return arduino_root
 
 	def getDefaultArduinoRoot(self):
+		arduino_root = ''
 		if const.sys_platform == 'osx':
 			arduino_root = '/Applications/Arduino'
 		elif const.sys_platform == 'linux':

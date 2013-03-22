@@ -4,7 +4,6 @@
 import sublime
 import os
 import re
-import shutil
 
 from stino import osfile
 from stino import const
@@ -34,6 +33,12 @@ def getTextFromSketch(sketch):
 
 def genSimpleSrcText(src_text):
 	simple_src_text = ''
+
+	pattern_text = r'/\*[\S\s]*?\*/'
+	src_text = re.sub(pattern_text, '\n', src_text)
+	pattern_text = r'//[\S\s]*?\n'
+	src_text = re.sub(pattern_text, '\n', src_text)
+
 	src_text = src_text.replace('#', '\n#')
 	src_text = src_text.replace('{', '\n{\n')
 	src_text = src_text.replace('}', '\n}\n')
@@ -42,7 +47,7 @@ def genSimpleSrcText(src_text):
 	level = 0
 	for line in src_lines:
 		line = line.strip()
-		if line and (not line[:2] == '//'):
+		if line:
 			if '}' in line:
 				level -= 1
 			if level == 0:
@@ -50,6 +55,7 @@ def genSimpleSrcText(src_text):
 				simple_src_text += '\n'
 			if '{' in line:
 				level += 1
+	simple_src_text = simple_src_text.replace(';', ';\n')
 	return simple_src_text
 
 def regulariseBlank(text):
@@ -63,17 +69,29 @@ def regulariseBlank(text):
 	text = text[:-1]
 	return text
 
+def regulariseFunctionName(function_name):
+	pattern_text = r'\S+'
+	word_list = re.findall(pattern_text, function_name)[-2:]
+
+	function_name = ''
+	for word in word_list:
+		function_name += word
+		function_name += ' '
+	function_name = function_name[:-1]
+	return function_name
+
 def regulariseFuctionText(function_text):
-	text_list = function_text.split('(')
-	function_name = text_list[0]
-	parameters = text_list[1][:-1]
-	function_name = regulariseBlank(function_name)
+	text = function_text.split(')')[-2]
+	text_list = text.split('(')
+	function_name = text_list[0].strip()
+	function_name = regulariseFunctionName(function_name)
+	parameters = text_list[1].strip()
 	parameters = regulariseBlank(parameters)
-	function_text = function_name + '(' + parameters + ')'
+	function_text = function_name + ' (' + parameters + ')'
 	return function_text
 
 def genSrcDeclarationList(simple_src_text):
-	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?\;'
+	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?;'
 	declaration_list = re.findall(pattern_text, simple_src_text)
 	src_declaration_list = [declaration[:-1].strip() for declaration in declaration_list]
 	src_declaration_list = [regulariseFuctionText(declaration) for declaration in src_declaration_list]
@@ -93,7 +111,7 @@ def isMainSrcText(src_text):
 	state = False
 	simple_src_text = genSimpleSrcText(src_text)
 	src_function_list = genSrcFunctionList(simple_src_text)
-	if 'void setup()' in src_function_list and 'void loop()' in src_function_list:
+	if 'void setup ()' in src_function_list and 'void loop ()' in src_function_list:
 		state = True
 	return state
 
@@ -208,7 +226,7 @@ def getSketchNameFromFolder(sketch_folder_path):
 def genHeaderListFromSketchText(sketch_text):
 	header_list = []
 	simple_src_text = genSimpleSrcText(sketch_text)
-	pattern_text = r'#include\s+["<]\S+?[>"]'
+	pattern_text = r'#include\s+?["<]\S+?[>"]'
 	include_header_list = re.findall(pattern_text, simple_src_text)
 	for include_header in include_header_list:
 		header = include_header.replace('#include', '').strip()
@@ -265,26 +283,3 @@ def openExample(path):
 		if cur_file_ext in src_ext_list:
 			cur_file_path = os.path.join(path, cur_file)
 			window.open_file(cur_file_path)
-
-# def openExample(path):
-# 	folder_name = os.path.split(path)[1]
-# 	sketchbook_root = const.settings.get('sketchbook_root')
-# 	des_path = os.path.join(sketchbook_root, 'temp')
-# 	des_path = os.path.join(des_path, folder_name)
-	
-# 	number = 0
-# 	new_des_path = des_path
-# 	while os.path.exists(new_des_path):
-# 		number += 1
-# 		new_des_path = des_path + ('_%d' % number)
-# 	des_path = new_des_path
-	
-# 	shutil.copytree(path, des_path, True)
-# 	sublime.run_command('new_window')
-# 	window = sublime.windows()[-1]
-# 	file_list = osfile.listDir(des_path, with_dirs = False)
-# 	for cur_file in file_list:
-# 		cur_file_ext = os.path.splitext(cur_file)[1]
-# 		if cur_file_ext in src_ext_list:
-# 			cur_file_path = os.path.join(des_path, cur_file)
-# 			window.open_file(cur_file_path)

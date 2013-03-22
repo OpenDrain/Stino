@@ -202,8 +202,8 @@ class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 
 	def on_done(self, input_text):
 		extra_flags = input_text
-		if (not extra_flags) or (len(extra_flags) < 2):
-			extra_flags = '-D'
+		if (not extra_flags) or (len(extra_flags) < 3):
+			extra_flags = ''
 		stino.const.settings.set('extra_flags', extra_flags)
 		stino.const.save_settings()
 

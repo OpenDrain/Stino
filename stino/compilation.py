@@ -3,10 +3,11 @@
 
 import sublime
 import threading
-import time
+import datetime
 import os
 import re
 import subprocess
+import shlex
 
 from stino import const
 from stino import osfile
@@ -32,19 +33,18 @@ ram_size_dict['at90usb1286'] = '8192'
 ram_size_dict['cortex-m3'] = '98304'
 ram_size_dict['cortex-m4'] = '16384'
 
-def isWriteAccess(folder_path):
-	state = True
-	filename = 'write_test.stino'
-	file_path = os.path.join(folder_path, filename)
-	try:
-		opened_file = open(file_path, 'w')
-		opened_file.write('test')
-	except IOError:
-		state = False
-	else:
-		opened_file.close()
-		os.remove(file_path)
-	return state
+def formatNumber(number):
+	length = len(number)
+	number_str = number[::-1]
+	seq = 1
+	new_number = ''
+	for digit in number_str:
+		if seq % 3 == 0:
+			if seq != length:
+				digit = ',' + digit
+		new_number = digit + new_number
+		seq += 1
+	return new_number
 
 def findSrcFiles(path):
 	file_path_list = []
@@ -261,6 +261,16 @@ def regulariseDictValue(info_dict, info_key_list):
 			info_dict[info_key] = info_value
 	return info_dict
 
+def getSizeInfo(size_text):
+	size_line = size_text.split('\n')[-2].strip()
+	info_list = re.findall(r'\S+', size_line)
+	text_size = int(info_list[0])
+	data_size = int(info_list[1])
+	bss_size = int(info_list[2])
+	flash_size = text_size + data_size
+	ram_size = data_size + bss_size
+	return (flash_size, ram_size)
+
 class Compilation:
 	def __init__(self, language, arduino_info, file_path):
 		self.language = language
@@ -294,11 +304,11 @@ class Compilation:
 		self.verbose_upload = const.settings.get('verbose_upload')
 		self.verify_code = const.settings.get('verify_code')
 
-		self.extra_compilation_flags = const.settings.get('extra_flags')
+		self.extra_compilation_flags = const.settings.get('extra_flags', '')
 		self.arduino_root = self.arduino_info.getArduinoRoot()
 		self.sketchbook_root = const.settings.get('sketchbook_root')
 		serial_port = const.settings.get('serial_port')
-		variant_path = os.path.join(self.core_root, 'variants')
+		self.variant_path = os.path.join(self.core_root, 'variants')
 		build_system_path = os.path.join(self.core_root, 'system')
 		arduino_version = self.arduino_info.getVersion()
 		self.archive_file = 'core.a'
@@ -313,7 +323,7 @@ class Compilation:
 		self.base_info_dict['serial.port'] = serial_port
 		self.base_info_dict['serial.port.file'] = serial_port
 		self.base_info_dict['archive_file'] = self.archive_file
-		self.base_info_dict['build.variant.path'] = variant_path
+		self.base_info_dict['build.variant.path'] = self.variant_path
 		self.base_info_dict['build.system.path'] = build_system_path
 		self.base_info_dict['software'] = 'ARDUINO'
 		self.base_info_dict['runtime.ide.version'] = '%d' % arduino_version
@@ -337,6 +347,7 @@ class Compilation:
 		if self.isReady:
 			self.output_panel.clear()
 			self.output_panel.addText('Start compiling...\n')
+			self.starttime = datetime.datetime.now()
 			compilation_thread = threading.Thread(target=self.compile)
 			compilation_thread.start()
 
@@ -366,7 +377,6 @@ class Compilation:
 		if self.error_code == 0:
 			self.cleanObjFiles()
 			self.runCompilationCommands()
-			self.is_finished = True
 
 	def checkBuildPath(self):
 		self.build_path = os.path.join(self.sketchbook_root, 'build')
@@ -400,7 +410,7 @@ class Compilation:
 		info_key_list.append('recipe.ino.o.pattern')
 
 		if not 'compiler.path' in info_dict:
-			compiler_path = os.path.join(self.arduino_root, 'tools/avr/bin/')
+			compiler_path = os.path.join(self.arduino_root, 'hardware/tools/avr/bin/')
 			compiler_path = compiler_path.replace(os.path.sep, '/')
 			info_dict['compiler.path'] = compiler_path
 
@@ -480,7 +490,7 @@ class Compilation:
 		include_library_path_list = ['.', self.core_folder_path]
 		if 'build.variant' in self.info_dict:
 			variant_folder = self.info_dict['build.variant']
-			variant_folder_path = os.path.join(self.core_root, variant_folder)
+			variant_folder_path = os.path.join(self.variant_path, variant_folder)
 			variant_folder_path = variant_folder_path.replace(os.path.sep, '/')
 			include_library_path_list.append(variant_folder_path)
 
@@ -550,10 +560,6 @@ class Compilation:
 			obj_path = obj_path.replace(os.path.sep, '/')
 			obj_path_list.append(obj_path)
 
-			command_text = '@echo "%s %s..."' % ('%(Creating)s', obj_path)
-			command_text = command_text % self.language.getTransDict()
-			command_list.append(command_text)
-
 			src_ext = os.path.splitext(src_path)[1]
 			if src_ext in ['.c', '.cc']:
 				pattern = 'recipe.c.o.pattern'
@@ -567,26 +573,26 @@ class Compilation:
 			command_list.append(command_text)
 		return (obj_path_list, command_list)
 
-	def genArCommandList(self, core_obj_path_list):
+	def genArCommandInfo(self, core_obj_path_list):
 		command_list = []
 		ar_file_path = self.build_path + '/' + self.archive_file
-		command_text = '@echo "%s %s..."' % ('%(Creating)s', ar_file_path)
-		command_text = command_text % self.language.getTransDict()
-		command_list.append(command_text)
+		ar_file_path_list = [ar_file_path]
+
+		object_files = ''
+		for sketch_obj_path in core_obj_path_list:
+			object_files += '"%s" ' % sketch_obj_path
+		object_files = object_files[:-1]
 
 		pattern = 'recipe.ar.pattern'
-		command_text_pattern = self.info_dict[pattern]
-		for core_obj_path in core_obj_path_list:
-			command_text = command_text_pattern.replace('{object_file}', core_obj_path)
-			command_list.append(command_text)
-		return command_list
+		command_text = self.info_dict[pattern]
+		command_text = command_text.replace('"{object_file}"', object_files)
+		command_list.append(command_text)
+		return (ar_file_path_list, command_list)
 
-	def genElfCommandList(self, sketch_obj_path_list):
+	def genElfCommandInfo(self, sketch_obj_path_list):
 		command_list = []
 		elf_file_path = self.build_path + '/' + self.sketch_name + '.elf'
-		command_text = '@echo "%s %s..."' % ('%(Creating)s', elf_file_path)
-		command_text = command_text % self.language.getTransDict()
-		command_list.append(command_text)
+		elf_file_path_list = [elf_file_path]
 
 		object_files = ''
 		for sketch_obj_path in sketch_obj_path_list:
@@ -597,36 +603,31 @@ class Compilation:
 		command_text = self.info_dict[pattern]
 		command_text = command_text.replace('{object_files}', object_files)
 		command_list.append(command_text)
-		return command_list
+		return (elf_file_path_list, command_list)
 
-	def genEepCommandList(self):
+	def genEepCommandInfo(self):
 		command_list = []
 		eep_file_path = self.build_path + '/' + self.sketch_name + '.eep'
-		command_text = '@echo "%s %s..."' % ('%(Creating)s', eep_file_path)
-		command_text = command_text % self.language.getTransDict()
-		command_list.append(command_text)
+		eep_file_path_list = [eep_file_path]
 
 		pattern = 'recipe.objcopy.eep.pattern'
 		command_text = self.info_dict[pattern]
 		command_list.append(command_text)
-		return command_list
+		return (eep_file_path_list, command_list)
 
-	def genHexCommandList(self):
+	def genHexCommandInfo(self):
 		command_list = []
 
 		pattern = 'recipe.objcopy.hex.pattern'
 		command_text = self.info_dict[pattern]
 		ext = command_text[-5:-1]
-
 		hex_file_path = self.build_path + '/' + self.sketch_name + ext
-		command_text = '@echo "%s %s..."' % ('%(Creating)s', hex_file_path)
-		command_text = command_text % self.language.getTransDict()
-		command_list.append(command_text)
+		hex_file_path_list = [hex_file_path]
 
 		pattern = 'recipe.objcopy.hex.pattern'
 		command_text = self.info_dict[pattern]
 		command_list.append(command_text)
-		return command_list
+		return (hex_file_path_list, command_list)
 
 	def genSizeCommandList(self):
 		command_list = []
@@ -639,71 +640,111 @@ class Compilation:
 		return command_list
 
 	def genCompilationCommandList(self):
-		(self.sketch_obj_path_list, sketch_command_list) = self.genSrcCompilationCommandInfo(self.sketch_src_path_list)
-		(self.core_obj_path_list, core_command_list) = self.genSrcCompilationCommandInfo(self.core_src_path_list)
-		ar_command_list = self.genArCommandList(self.core_obj_path_list)
-		elf_command_list = self.genElfCommandList(self.sketch_obj_path_list)
-		eep_command_list = self.genEepCommandList()
-		hex_command_list = self.genHexCommandList()
+		(sketch_obj_path_list, sketch_command_list) = self.genSrcCompilationCommandInfo(self.sketch_src_path_list)
+		(core_obj_path_list, core_command_list) = self.genSrcCompilationCommandInfo(self.core_src_path_list)
+		(ar_file_path_list, ar_command_list) = self.genArCommandInfo(core_obj_path_list)
+		(elf_file_path_list, elf_command_list) = self.genElfCommandInfo(sketch_obj_path_list)
+		(eep_file_path_list, eep_command_list) = self.genEepCommandInfo()
+		(hex_file_path_list, hex_command_list) = self.genHexCommandInfo()
 		size_command_list = self.genSizeCommandList()
 
+		self.created_file_list = []
 		self.compilation_command_list = []
+		self.created_file_list += sketch_obj_path_list
 		self.compilation_command_list += sketch_command_list
 		if self.full_compilation:
+			self.created_file_list += core_obj_path_list
 			self.compilation_command_list += core_command_list
+			self.created_file_list += ar_file_path_list
 			self.compilation_command_list += ar_command_list
+		self.created_file_list += elf_file_path_list
 		self.compilation_command_list += elf_command_list
 		if self.info_dict['recipe.objcopy.eep.pattern']:
+			self.created_file_list += eep_file_path_list
 			self.compilation_command_list += eep_command_list
+		self.created_file_list += hex_file_path_list
 		self.compilation_command_list += hex_command_list
+		self.created_file_list += ['']
 		self.compilation_command_list += size_command_list
 
 	def cleanObjFiles(self):
-		text = '%(Cleaning)s...\n' % self.language.getTransDict()
-		self.output_panel.addText(text)
-		ar_file_path = self.build_path + '/' + self.archive_file
-		elf_file_path = self.build_path + '/' + self.sketch_name + '.elf'
-		eep_file_path = self.build_path + '/' + self.sketch_name + '.eep'
-		pattern = 'recipe.objcopy.hex.pattern'
-		command_text = self.info_dict[pattern]
-		ext = command_text[-5:-1]
-		hex_file_path = self.build_path + '/' + self.sketch_name + ext
-		file_path_list = []
-		if self.full_compilation:
-			for core_obj_path in self.core_obj_path_list:
-				file_path_list.append(core_obj_path)
-			file_path_list.append(ar_file_path)
-		for sketch_obj_path in self.sketch_obj_path_list:
-			file_path_list.append(sketch_obj_path)
-		file_path_list.append(elf_file_path)
-		if self.info_dict['recipe.objcopy.eep.pattern']:
-			file_path_list.append(eep_file_path)
-		file_path_list.append(hex_file_path)
-
-		for file_path in file_path_list:
+		msg = '%(Cleaning)s...\n' % self.language.getTransDict()
+		self.output_panel.addText(msg)
+		for file_path in self.created_file_list:
 			if os.path.isfile(file_path):
 				os.remove(file_path)
 
 	def runCompilationCommands(self):
+		has_error = False
 		os.chdir(self.sketch_folder_path)
-		for compilation_command in self.compilation_command_list:
+		compilation_info = zip(self.created_file_list, self.compilation_command_list)
+		for (created_file, compilation_command) in compilation_info:
+			if created_file:
+				text = '%(Creating)s {1}...\n'
+				msg = text % self.language.getTransDict()
+				msg = msg.replace('{1}', created_file)
+				self.output_panel.addText(msg)
+
 			if const.sys_platform == 'windows':
 				compilation_command = compilation_command.replace('/', os.path.sep)
-
-			self.output_panel.addText(compilation_command)
-			self.output_panel.addText('\n')
-
-			compilation_process = subprocess.Popen(compilation_command, stdout = subprocess.PIPE, \
-				stderr = subprocess.PIPE, shell = True)
-			
+			args = compilation_command.encode(const.sys_encoding)
+			args = shlex.split(args)
+				
+			compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True)
 			result = compilation_process.communicate()
 			stdout = result[0]
 			stderr = result[1]
 						
-			if stdout:
-				self.output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
+			if self.verbose_compilation:
+				self.output_panel.addText(compilation_command)
+				self.output_panel.addText('\n')
+				if stdout:
+					self.output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
+
+			if not created_file:
+				if stdout:
+					(flash_size, ram_size) = getSizeInfo(stdout)
+					flash_size_text = str(flash_size)
+					ram_size_text = str(ram_size)
+					upload_maximum_size_text = self.info_dict['upload.maximum_size']
+					upload_maximum_ram_size_text = self.info_dict['upload.maximum_ram_size']
+					upload_maximum_size = float(upload_maximum_size_text)
+					upload_maximum_ram_size = float(upload_maximum_ram_size_text)
+
+					flash_size_percentage = (flash_size / upload_maximum_size) * 100
+					ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
+					
+					flash_size_text = formatNumber(flash_size_text)
+					ram_size_text = formatNumber(ram_size_text)
+					upload_maximum_size_text = formatNumber(upload_maximum_size_text)
+					upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
+
+					text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
+					msg = text
+					msg = msg.replace('{1}', flash_size_text)
+					msg = msg.replace('{2}', upload_maximum_size_text)
+					msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
+					self.output_panel.addText(msg)
+
+					text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
+					msg = text
+					msg = msg.replace('{1}', ram_size_text)
+					msg = msg.replace('{2}', upload_maximum_ram_size_text)
+					msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
+					self.output_panel.addText(msg)
+
 			if stderr:
 				self.output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
-
-
-			
+				has_error = True
+				break
+		
+		if has_error:
+			self.error_code = 4
+			msg = '[Stino - Compilation terminated with errors.]\n'
+			self.output_panel.addText(msg)
+		else:
+			self.endtime = datetime.datetime.now()
+			interval = (self.endtime - self.starttime).seconds
+			msg = '[Stino - Compilation completed in %s s.]\n' % interval
+			self.output_panel.addText(msg)
+			self.is_finished = True
