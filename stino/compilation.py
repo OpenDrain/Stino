@@ -261,6 +261,11 @@ def regulariseDictValue(info_dict, info_key_list):
 			info_dict[info_key] = info_value
 	return info_dict
 
+def genCommandArgs(command):
+	command = command.encode(const.sys_encoding)
+	args = shlex.split(command)
+	return args
+
 def getSizeInfo(size_text):
 	size_line = size_text.split('\n')[-2].strip()
 	info_list = re.findall(r'\S+', size_line)
@@ -272,9 +277,10 @@ def getSizeInfo(size_text):
 	return (flash_size, ram_size)
 
 class Compilation:
-	def __init__(self, language, arduino_info, file_path):
+	def __init__(self, language, arduino_info, menu, file_path):
 		self.language = language
 		self.arduino_info = arduino_info
+		self.menu = menu
 		self.sketch_folder_path = src.getSketchFolderPath(file_path)
 		self.sketch_name = src.getSketchNameFromFolder(self.sketch_folder_path)
 		compilation_name = 'Compilation_' + self.sketch_name
@@ -674,6 +680,37 @@ class Compilation:
 			if os.path.isfile(file_path):
 				os.remove(file_path)
 
+	def printSizeInfo(self, size_text):
+		(flash_size, ram_size) = getSizeInfo(size_text)
+		flash_size_text = str(flash_size)
+		ram_size_text = str(ram_size)
+		upload_maximum_size_text = self.info_dict['upload.maximum_size']
+		upload_maximum_ram_size_text = self.info_dict['upload.maximum_ram_size']
+		upload_maximum_size = float(upload_maximum_size_text)
+		upload_maximum_ram_size = float(upload_maximum_ram_size_text)
+
+		flash_size_percentage = (flash_size / upload_maximum_size) * 100
+		ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
+		
+		flash_size_text = formatNumber(flash_size_text)
+		ram_size_text = formatNumber(ram_size_text)
+		upload_maximum_size_text = formatNumber(upload_maximum_size_text)
+		upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
+
+		text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
+		msg = text
+		msg = msg.replace('{1}', flash_size_text)
+		msg = msg.replace('{2}', upload_maximum_size_text)
+		msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
+		self.output_panel.addText(msg)
+
+		text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
+		msg = text
+		msg = msg.replace('{1}', ram_size_text)
+		msg = msg.replace('{2}', upload_maximum_ram_size_text)
+		msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
+		self.output_panel.addText(msg)
+
 	def runCompilationCommands(self):
 		has_error = False
 		os.chdir(self.sketch_folder_path)
@@ -687,9 +724,7 @@ class Compilation:
 
 			if const.sys_platform == 'windows':
 				compilation_command = compilation_command.replace('/', os.path.sep)
-			args = compilation_command.encode(const.sys_encoding)
-			args = shlex.split(args)
-				
+			args = genCommandArgs(compilation_command)
 			compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True)
 			result = compilation_process.communicate()
 			stdout = result[0]
@@ -703,35 +738,8 @@ class Compilation:
 
 			if not created_file:
 				if stdout:
-					(flash_size, ram_size) = getSizeInfo(stdout)
-					flash_size_text = str(flash_size)
-					ram_size_text = str(ram_size)
-					upload_maximum_size_text = self.info_dict['upload.maximum_size']
-					upload_maximum_ram_size_text = self.info_dict['upload.maximum_ram_size']
-					upload_maximum_size = float(upload_maximum_size_text)
-					upload_maximum_ram_size = float(upload_maximum_ram_size_text)
-
-					flash_size_percentage = (flash_size / upload_maximum_size) * 100
-					ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
-					
-					flash_size_text = formatNumber(flash_size_text)
-					ram_size_text = formatNumber(ram_size_text)
-					upload_maximum_size_text = formatNumber(upload_maximum_size_text)
-					upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
-
-					text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
-					msg = text
-					msg = msg.replace('{1}', flash_size_text)
-					msg = msg.replace('{2}', upload_maximum_size_text)
-					msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
-					self.output_panel.addText(msg)
-
-					text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
-					msg = text
-					msg = msg.replace('{1}', ram_size_text)
-					msg = msg.replace('{2}', upload_maximum_ram_size_text)
-					msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
-					self.output_panel.addText(msg)
+					size_text = stdout
+					self.printSizeInfo(size_text)
 
 			if stderr:
 				self.output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
@@ -748,3 +756,9 @@ class Compilation:
 			msg = '[Stino - Compilation completed in %s s.]\n' % interval
 			self.output_panel.addText(msg)
 			self.is_finished = True
+			sublime.set_timeout(self.changeSettings, 0)
+
+	def changeSettings(self):
+		const.settings.set('full_compilation', False)
+		const.save_settings()
+		self.menu.commandUpdate()
