@@ -4,6 +4,7 @@
 import sublime
 import threading
 import datetime
+import time
 import os
 import re
 import subprocess
@@ -253,8 +254,6 @@ def parsePlatformInfo(platform_file_path):
 	for line in lines:
 		line = line.strip()
 		if line and (not '#' in line):
-			if 'build.extra_flags=' in line:
-				continue
 			(key, value) = utils.getKeyValue(line)
 			if 'tools.' in key:
 				key = regulariseToolsKey(key)
@@ -296,14 +295,70 @@ def getSizeInfo(size_text):
 	ram_size = data_size + bss_size
 	return (flash_size, ram_size)
 
+def printSizeInfo(size_text, info_dict, output_panel):
+	(flash_size, ram_size) = getSizeInfo(size_text)
+	
+	upload_maximum_size_text = info_dict['upload.maximum_size']
+	flash_size_text = str(flash_size)
+	upload_maximum_size = float(upload_maximum_size_text)
+	flash_size_percentage = (flash_size / upload_maximum_size) * 100
+	flash_size_text = formatNumber(flash_size_text)
+	upload_maximum_size_text = formatNumber(upload_maximum_size_text)
+	text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
+	msg = text
+	msg = msg.replace('{1}', flash_size_text)
+	msg = msg.replace('{2}', upload_maximum_size_text)
+	msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
+	output_panel.addText(msg)
+
+	upload_maximum_ram_size_text = info_dict['upload.maximum_ram_size']
+	if upload_maximum_ram_size_text:
+		ram_size_text = str(ram_size)
+		upload_maximum_ram_size = float(upload_maximum_ram_size_text)
+		ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
+		ram_size_text = formatNumber(ram_size_text)
+		upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
+		text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
+		msg = text
+		msg = msg.replace('{1}', ram_size_text)
+		msg = msg.replace('{2}', upload_maximum_ram_size_text)
+		msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
+		output_panel.addText(msg)
+
+def runCommand(command, isSizeCommand, info_dict, output_panel, verbose_output):
+	args = genCommandArgs(command)
+	compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True)
+	result = compilation_process.communicate()
+	return_code = compilation_process.returncode
+	stdout = result[0]
+	stderr = result[1]
+				
+	if verbose_output:
+		output_panel.addText(command)
+		output_panel.addText('\n')
+		if stdout:
+			output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
+			output_panel.addText('\n')
+
+	if isSizeCommand:
+		size_text = stdout
+		printSizeInfo(size_text, info_dict, output_panel)
+
+	if stderr:
+		output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
+	return return_code
+
 class Compilation:
-	def __init__(self, language, arduino_info, menu, file_path):
+	def __init__(self, language, arduino_info, menu, file_path, is_run_cmd = True):
 		self.language = language
 		self.arduino_info = arduino_info
 		self.menu = menu
+		self.is_run_cmd = is_run_cmd
 		self.sketch_folder_path = src.getSketchFolderPath(file_path)
 		self.sketch_name = src.getSketchNameFromFolder(self.sketch_folder_path)
-		compilation_name = 'Compilation_' + self.sketch_name
+		now_time = datetime.datetime.now()
+		time_str = str(now_time.microsecond)
+		compilation_name = 'Compilation_' + self.sketch_name + '_' + time_str
 		self.output_panel = stpanel.STPanel(compilation_name)
 		self.output_panel.toggleWordWrap()
 		self.error_code = 0
@@ -339,6 +394,7 @@ class Compilation:
 		build_system_path = os.path.join(self.core_root, 'system')
 		arduino_version = self.arduino_info.getVersion()
 		self.archive_file = 'core.a'
+		self.hex_file_path = ''
 		
 		self.cores_path = self.cores_path.replace(os.path.sep, '/')
 		self.core_root = self.core_root.replace(os.path.sep, '/')
@@ -366,20 +422,22 @@ class Compilation:
 			self.error_code = 0
 		return state
 
-	def isDone(self):
-		return self.is_finished
-
 	def start(self):
 		if self.isReady:
 			self.output_panel.clear()
-			self.output_panel.addText('Start compilation...\n')
 			self.starttime = datetime.datetime.now()
 			compilation_thread = threading.Thread(target=self.compile)
 			compilation_thread.start()
+		else:
+			self.error_code = 1
+			self.is_finished = True
 
 	def compile(self):
 		self.postCompilationProcess()
-		self.runCompile()
+		if self.is_run_cmd:
+			self.output_panel.addText('Start compilation...\n')
+			self.runCompile()
+		self.is_finished = True
 
 	def postCompilationProcess(self):
 		(main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
@@ -387,10 +445,12 @@ class Compilation:
 			self.error_code = 2
 			msg = 'Error: No main source file was found. A main source file should contain setup() and loop() functions.\n'
 			self.output_panel.addText(msg)
+			self.is_finished = True
 		elif main_src_number > 1:
 			self.error_code = 3
 			msg = 'Error: More than one (%d) main source files were found. A main source file contains setup() and loop() functions.\n' % main_src_number
 			self.output_panel.addText(msg)
+			self.is_finished = True
 		else:
 			self.checkBuildPath()
 			self.info_dict = self.genInfoDict()
@@ -420,11 +480,18 @@ class Compilation:
 		(programmer_info_key_list, programmer_info_dict) = self.genProgrammerInfo()
 		(platform_info_key_list, platform_info_dict) = self.genPlatformInfo()
 
+		info_key_list = board_info_key_list + programmer_info_key_list
 		info_dict = self.base_info_dict
-		info_key_list = board_info_key_list + programmer_info_key_list + platform_info_key_list
 		info_dict = dict(info_dict, **board_info_dict)
 		info_dict = dict(info_dict, **programmer_info_dict)
-		info_dict = dict(info_dict, **platform_info_dict)
+		
+		for info_key in platform_info_key_list:
+			if info_key in info_key_list:
+				if not info_dict[info_key]:
+					info_dict[info_key] = platform_info_dict[info_key]
+			else:
+				info_key_list.append(info_key)
+				info_dict[info_key] = platform_info_dict[info_key]
 
 		info_dict['compiler.c.flags'] += ' '
 		info_dict['compiler.c.flags'] += self.extra_compilation_flags
@@ -441,6 +508,11 @@ class Compilation:
 			variant_folder_path = os.path.join(self.variant_path, variant_folder)
 			self.variant_folder_path = variant_folder_path.replace(os.path.sep, '/')
 			info_dict['build.variant.path'] = self.variant_folder_path
+		else:
+			core_folder = info_dict['build.core']
+			core_folder_path = os.path.join(self.cores_path, core_folder)
+			core_folder_path = core_folder_path.replace(os.path.sep, '/')
+			info_dict['build.variant.path'] = core_folder_path
 
 		if not 'compiler.path' in info_dict:
 			compiler_path = os.path.join(self.arduino_root, 'hardware/tools/avr/bin/')
@@ -453,7 +525,7 @@ class Compilation:
 					info_dict['build.elide_constructors'] = '-felide-constructors'
 				else:
 					info_dict['build.elide_constructors'] = ''
-			if 'build.mcu' in info_dict:
+			if 'build.cpu' in info_dict:
 				info_dict['build.mcu'] = info_dict['build.cpu']
 			if 'build.gnu0x' in info_dict:
 				if info_dict['build.gnu0x'] == 'true':
@@ -472,22 +544,48 @@ class Compilation:
 			else:
 				info_dict['upload.maximum_ram_size'] = ''
 
+		if 'cmd.path.linux' in info_dict:
+			if const.sys_platform == 'linux':
+				info_dict['cmd.path'] = info_dict['cmd.path.linux']
+				info_dict['config.path'] = info_dict['config.path.linux']
+
+		if not self.verbose_upload:
+			if 'upload.quiet' in info_dict:
+				info_dict['upload.verbose'] = info_dict['upload.quiet']
+			if 'program.quiet' in info_dict:
+				info_dict['program.verbose'] = info_dict['program.quiet']
+			if 'erase.quiet' in info_dict:
+				info_dict['erase.verbose'] = info_dict['erase.quiet']
+			if 'bootloader.quiet' in info_dict:
+				info_dict['bootloader.verbose'] = info_dict['bootloader.quiet']
+
+		if 'AVR' in self.platform:
+			if not self.verify_code:
+				if 'upload.quiet' in info_dict:
+					info_dict['upload.verbose'] += ' -V'
+				if 'program.quiet' in info_dict:
+					info_dict['program.verbose'] += ' -V'
+				if 'erase.quiet' in info_dict:
+					info_dict['erase.verbose'] += ' -V'
+				if 'bootloader.quiet' in info_dict:
+					info_dict['bootloader.verbose'] += ' -V'
+
 		info_dict = regulariseDictValue(info_dict, info_key_list)
 		return info_dict
 
 	def genBoardInfo(self):
 		board_file_path = self.arduino_info.getBoardFile(self.platform, self.board)
-		board_info_dict = parseBoradInfo(board_file_path, self.board, self.board_type_value_dict)
-		return board_info_dict
+		(board_info_key_list, board_info_dict) = parseBoradInfo(board_file_path, self.board, self.board_type_value_dict)
+		return (board_info_key_list, board_info_dict)
 		
 	def genProgrammerInfo(self):
 		programmer_file_path = self.arduino_info.getProgrammerFile(self.platform, self.programmer)
-		programmer_info_dict = parseProgrammerInfo(programmer_file_path, self.programmer)
-		return programmer_info_dict
+		(programmer_info_key_list, programmer_info_dict) = parseProgrammerInfo(programmer_file_path, self.programmer)
+		return (programmer_info_key_list, programmer_info_dict)
 
 	def genPlatformInfo(self):
-		platform_info_dict = parsePlatformInfo(self.platform_file_path)
-		return platform_info_dict
+		(platform_info_key_list, platform_info_dict) = parsePlatformInfo(self.platform_file_path)
+		return (platform_info_key_list, platform_info_dict)
 
 	def genSketchSrcPathList(self):
 		os.chdir(self.sketch_folder_path)
@@ -689,6 +787,7 @@ class Compilation:
 		ar_file_path = ar_file_path_list[0]
 		if not os.path.isfile(ar_file_path):
 			self.full_compilation = True
+		self.hex_file_path = hex_file_path_list[0]
 
 		self.created_file_list = []
 		self.compilation_command_list = []
@@ -716,58 +815,6 @@ class Compilation:
 			if os.path.isfile(file_path):
 				os.remove(file_path)
 
-	def printSizeInfo(self, size_text):
-		(flash_size, ram_size) = getSizeInfo(size_text)
-		
-		upload_maximum_size_text = self.info_dict['upload.maximum_size']
-		flash_size_text = str(flash_size)
-		upload_maximum_size = float(upload_maximum_size_text)
-		flash_size_percentage = (flash_size / upload_maximum_size) * 100
-		flash_size_text = formatNumber(flash_size_text)
-		upload_maximum_size_text = formatNumber(upload_maximum_size_text)
-		text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
-		msg = text
-		msg = msg.replace('{1}', flash_size_text)
-		msg = msg.replace('{2}', upload_maximum_size_text)
-		msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
-		self.output_panel.addText(msg)
-
-		upload_maximum_ram_size_text = self.info_dict['upload.maximum_ram_size']
-		if upload_maximum_ram_size_text:
-			ram_size_text = str(ram_size)
-			upload_maximum_ram_size = float(upload_maximum_ram_size_text)
-			ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
-			ram_size_text = formatNumber(ram_size_text)
-			upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
-			text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
-			msg = text
-			msg = msg.replace('{1}', ram_size_text)
-			msg = msg.replace('{2}', upload_maximum_ram_size_text)
-			msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
-			self.output_panel.addText(msg)
-
-	def runCommand(self, command, isSizeCommand):
-		args = genCommandArgs(command)
-		compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True)
-		result = compilation_process.communicate()
-		return_code = compilation_process.returncode
-		stdout = result[0]
-		stderr = result[1]
-					
-		if self.verbose_compilation:
-			self.output_panel.addText(command)
-			self.output_panel.addText('\n')
-			if stdout:
-				self.output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
-
-		if isSizeCommand:
-			size_text = stdout
-			self.printSizeInfo(size_text)
-
-		if stderr:
-			self.output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
-		return return_code
-
 	def runCompilationCommands(self):
 		termination_with_error = False
 		os.chdir(self.sketch_folder_path)
@@ -782,7 +829,8 @@ class Compilation:
 					msg = text % self.language.getTransDict()
 					msg = msg.replace('{1}', created_file)
 					self.output_panel.addText(msg)
-			return_code = self.runCommand(compilation_command, isSizeCommand)
+			return_code = runCommand(compilation_command, isSizeCommand, self.info_dict, \
+				self.output_panel, self.verbose_compilation)
 			if return_code != 0:
 				termination_with_error = True
 				break
@@ -793,13 +841,126 @@ class Compilation:
 			self.output_panel.addText(msg)
 		else:
 			self.endtime = datetime.datetime.now()
-			interval = (self.endtime - self.starttime).seconds
-			msg = '[Stino - Compilation completed in %s s.]\n' % interval
+			interval = (self.endtime - self.starttime).microseconds * 1e-6
+			msg = '[Stino - Compilation completed.]\n'
 			self.output_panel.addText(msg)
-			self.is_finished = True
 			sublime.set_timeout(self.TurnFullCompilationOff, 0)
 
 	def TurnFullCompilationOff(self):
 		const.settings.set('full_compilation', False)
 		const.save_settings()
 		self.menu.commandUpdate()
+
+	def getHexFilePath(self):
+		return self.hex_file_path
+
+	def isTerminatedWithError(self):
+		if self.error_code == 0:
+			state = False
+		else:
+			state = True
+		return state
+
+	def getOutputPanel(self):
+		return self.output_panel
+
+	def getInfoDict(self):
+		return self.info_dict
+
+class Upload:
+	def __init__(self, language, arduino_info, menu, file_path, mode = 'upload'):
+		self.cur_compilation = Compilation(language, arduino_info, menu, file_path)
+		self.output_panel = self.cur_compilation.getOutputPanel()
+		self.error_code = 0
+		self.is_finished = False
+		self.mode = mode
+		self.verbose_upload = const.settings.get('verbose_upload')
+
+	def start(self):
+		self.cur_compilation.start()
+		upload_thread = threading.Thread(target=self.upload)
+		upload_thread.start()
+
+	def upload(self):
+		while not self.cur_compilation.is_finished:
+			time.sleep(0.5)
+		if self.cur_compilation.isTerminatedWithError():
+			self.error_code = 1
+		else:
+			self.info_dict = self.cur_compilation.getInfoDict()
+			self.hex_file_path = self.cur_compilation.getHexFilePath()
+			self.output_panel.addText('Start uploading %s...\n' % self.hex_file_path)
+			if self.mode == 'upload':
+				upload_command = self.info_dict['upload.pattern']
+			elif self.mode == 'upload_using_programmer':
+				if 'program.pattern' in self.info_dict:
+					upload_command = self.info_dict['program.pattern']
+			else:
+				upload_command = ''
+			if upload_command:
+				termination_with_error = False
+				command_list = [upload_command]
+				if 'reboot.pattern' in self.info_dict:
+					reboot_command = self.info_dict['reboot.pattern']
+					command_list.append(reboot_command)
+				for command in command_list:
+					isSizeCommand = False
+					return_code = runCommand(command, isSizeCommand, self.info_dict, \
+						self.output_panel, self.verbose_upload)
+					if return_code != 0:
+						termination_with_error = True
+						break
+				if termination_with_error:
+					self.error_code = 2
+					msg = '[Stino - Uploading terminated with errors.]\n'
+					self.output_panel.addText(msg)
+				else:
+					msg = '[Stino - Uploading completed.]\n'
+					self.output_panel.addText(msg)
+			else:
+				self.error_code = 3
+		self.is_finished = True
+
+class BurnBootloader:
+	def __init__(self, language, arduino_info, menu, file_path):
+		self.cur_compilation = Compilation(language, arduino_info, menu, file_path, is_run_cmd = False)
+		self.output_panel = self.cur_compilation.getOutputPanel()
+		self.error_code = 0
+		self.is_finished = False
+		self.verbose_upload = const.settings.get('verbose_upload')
+
+	def start(self):
+		self.cur_compilation.start()
+		upload_thread = threading.Thread(target=self.burn)
+		upload_thread.start()
+
+	def burn(self):
+		while not self.cur_compilation.is_finished:
+			time.sleep(0.5)
+		if self.cur_compilation.isTerminatedWithError():
+			self.error_code = 1
+		else:
+			self.info_dict = self.cur_compilation.getInfoDict()
+			if 'bootloader.file' in self.info_dict:
+				self.output_panel.addText('Start burning %s...\n' % self.info_dict['bootloader.file'])
+				termination_with_error = False
+				erase_command = self.info_dict['erase.pattern']
+				burn_command = self.info_dict['bootloader.pattern']
+				command_list = [erase_command, burn_command]
+				for command in command_list:
+					isSizeCommand = False
+					return_code = runCommand(command, isSizeCommand, self.info_dict, \
+						self.output_panel, self.verbose_upload)
+					if return_code != 0:
+						termination_with_error = True
+						break
+				if termination_with_error:
+					self.error_code = 2
+					msg = '[Stino - Bootloader burning terminated with errors.]\n'
+					self.output_panel.addText(msg)
+				else:
+					msg = '[Stino - Bootloader burning completed.]\n'
+					self.output_panel.addText(msg)
+			else:
+				self.error_code = 3
+		self.is_finished = True

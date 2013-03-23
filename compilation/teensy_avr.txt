@@ -2,7 +2,7 @@
 # Teensy compile variables
 # --------------------- 
 
-name=Arduino AVR Boards
+name=Teensy AVR Boards
 # Default "compiler.path" is correct, change only if you want to overidde the initial value
 #compiler.path={ide.path}/tools/avr/bin/..
 compiler.c.cmd=avr-gcc
@@ -57,5 +57,5 @@ tools.teensy.path={runtime.ide.path}/hardware/tools
 
 tools.teensy.upload.params.verbose=-v
 tools.teensy.upload.params.quiet=
-tools.teensy.upload.pattern="{cmd}" -file="{build.project_name}" -path="{build.path}" -tools="{path}"
-tools.teensy.reboot.pattern="teensy_reboot"
+tools.teensy.upload.pattern="{path}/{cmd}" -file="{build.project_name}" -path="{build.path}" -tools="{path}"
+tools.teensy.reboot.pattern="{path}/teensy_reboot"

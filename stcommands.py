@@ -225,11 +225,25 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		self.window.active_view().run_command('save')
+		filename = self.window.active_view().file_name()
+		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, filename)
+		cur_upload.start()
 
 class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		self.window.active_view().run_command('save')
+		filename = self.window.active_view().file_name()
+		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, filename, mode = 'upload_using_programmer')
+		cur_upload.start()
+
+	def is_enabled(self):
+		state = False
+		platform = stino.const.settings.get('platform')
+		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
+		if programmer_lists:
+			state = True
+		return state
 
 class SelectBoardCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
@@ -392,10 +406,17 @@ class SelectProgrammerCommand(sublime_plugin.WindowCommand):
 
 class BurnBootloaderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		pass
+		self.window.active_view().run_command('save')
+		filename = self.window.active_view().file_name()
+		cur_burn = stino.compilation.BurnBootloader(stino.cur_language, stino.arduino_info, stino.cur_menu, filename)
+		cur_burn.start()
 
 	def is_enabled(self):
-		state = True
+		state = False
+		platform = stino.const.settings.get('platform')
+		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
+		if programmer_lists:
+			state = True
 		return state
 
 class SelectLanguageCommand(sublime_plugin.WindowCommand):
