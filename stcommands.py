@@ -227,8 +227,18 @@ class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, filename)
+		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, \
+			filename, stino.serial_port_in_use_list, stino.serial_port_monitor_dict)
 		cur_upload.start()
+
+	def is_enabled(self):
+		state = True
+		platform = stino.const.settings.get('platform')
+		if 'AVR' in platform:
+			serial_port_list = stino.smonitor.genSerialPortList()
+			if not serial_port_list:
+				state = False
+		return state
 
 class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self):

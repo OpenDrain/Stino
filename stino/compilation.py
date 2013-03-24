@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import shlex
+import serial
 
 from stino import const
 from stino import osfile
@@ -16,6 +17,7 @@ from stino import utils
 from stino import src
 from stino import stpanel
 from stino import arduino
+from stino import smonitor
 
 ram_size_dict = {}
 ram_size_dict['attiny44'] = '256'
@@ -359,6 +361,26 @@ def runCommand(command, isSizeCommand, info_dict, output_panel, verbose_output):
 	if stderr:
 		output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
 	return return_code
+
+def getNewSerialPort(serial_port, serial_port_list):
+	ser = serial.Serial()
+	ser.port = serial_port
+	ser.baudrate = 1200
+	ser.open()
+	time.sleep(0.5)
+	ser.close()
+
+	serial_port_list.remove(serial_port)
+	new_serial_port_list = smonitor.genSerialPortList()
+	for serial_port in serial_port_list:
+		new_serial_port_list.remove(serial_port)
+	while not new_serial_port_list:
+		time.sleep(0.5)
+		new_serial_port_list = smonitor.genSerialPortList()
+		for serial_port in serial_port_list:
+			new_serial_port_list.remove(serial_port)
+	new_serial_port = new_serial_port_list[0]
+	return new_serial_port
 
 class Compilation:
 	def __init__(self, language, arduino_info, menu, file_path, is_run_cmd = True):
@@ -880,13 +902,24 @@ class Compilation:
 		return self.info_dict
 
 class Upload:
-	def __init__(self, language, arduino_info, menu, file_path, mode = 'upload'):
+	def __init__(self, language, arduino_info, menu, file_path, mode = 'upload', \
+		serial_port_in_use_list = None, serial_port_monitor_dict = None):
 		self.cur_compilation = Compilation(language, arduino_info, menu, file_path)
 		self.output_panel = self.cur_compilation.getOutputPanel()
 		self.error_code = 0
 		self.is_finished = False
 		self.mode = mode
+		self.board = const.settings.get('board')
 		self.verbose_upload = const.settings.get('verbose_upload')
+		
+		self.serial_port_in_use_list = serial_port_in_use_list
+		self.serial_port_monitor_dict = serial_port_monitor_dict
+		self.serial_port = const.settings.get('serial_port')
+		self.serial_port_list = smonitor.genSerialPortList()
+		
+		self.serial_monitor_is_running = False
+		if self.serial_port in self.serial_port_in_use_list:
+			self.serial_monitor_is_running = True
 
 	def start(self):
 		self.cur_compilation.start()
@@ -904,6 +937,13 @@ class Upload:
 			self.output_panel.addText('Start uploading %s...\n' % self.hex_file_path)
 			if self.mode == 'upload':
 				upload_command = self.info_dict['upload.pattern']
+				if self.serial_monitor_is_running:
+					serial_monitor = self.serial_port_monitor_dict[self.serial_monitor]
+					serial_monitor.stop()
+				if 'Leonardo' in self.board or 'Micro' in self.board:
+					new_serial_port = getNewSerialPort(self.serial_port, self.serial_port_list)
+					upload_command = upload_command.replace(self.serial_port, new_serial_port)
+					self.serial_port = new_serial_port
 			elif self.mode == 'upload_using_programmer':
 				if 'program.pattern' in self.info_dict:
 					upload_command = self.info_dict['program.pattern']
@@ -931,6 +971,9 @@ class Upload:
 					self.output_panel.addText(msg)
 			else:
 				self.error_code = 3
+			if self.serial_monitor_is_running:
+				serial_monitor.setSerialPort(self.serial_port)
+				serial_monitor.start()
 		self.is_finished = True
 
 class BurnBootloader:
