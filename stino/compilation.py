@@ -280,10 +280,22 @@ def regulariseDictValue(info_dict, info_key_list):
 
 def genCommandArgs(command):
 	command = command.encode(const.sys_encoding)
-	args = shlex.split(command)
 	if const.sys_platform == 'windows':
-		args[0] = args[0].replace('/', os.path.sep)
-	return args
+		command = command.replace('/"', '"')
+		command = command.replace('/', os.path.sep)
+	args = shlex.split(command)
+
+	std_args = []
+	for arg in args:
+		if ' ' in arg:
+			if const.sys_platform == 'windows':
+				pass
+				# arg = r'\"' + arg + r'\"'
+			else:
+				arg = arg.replace(' ', '\ ')
+		std_args.append(arg)
+	print std_args
+	return std_args
 
 def getSizeInfo(size_text):
 	size_line = size_text.split('\n')[-2].strip()
