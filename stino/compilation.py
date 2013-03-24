@@ -218,6 +218,10 @@ def getBoardInfoDict(info_block_list):
 def parseBoradInfo(board_file_path, board, board_type_value_dict):
 	info_block_list = genBoardInfoBlockList(board_file_path, board, board_type_value_dict)
 	(board_info_key_list, board_info_dict) = getBoardInfoDict(info_block_list)
+	if 'build.vid' in board_info_key_list:
+		if not 'build.extra_flags' in board_info_key_list:
+			board_info_key_list.append('build.extra_flags')
+			board_info_dict['build.extra_flags'] = '-DUSB_VID={build.vid} -DUSB_PID={build.pid}'
 	return (board_info_key_list, board_info_dict)
 
 def getProgrammerInfoBlock(programmer_file_path, programmer):
@@ -285,17 +289,13 @@ def genCommandArgs(command):
 	if const.sys_platform == 'windows':
 		command = command.replace('/"', '"')
 		command = command.replace('/', os.path.sep)
-	args = shlex.split(command)
-
-	std_args = []
-	for arg in args:
-		if ' ' in arg:
-			if const.sys_platform == 'windows':
-				pass
-				# arg = r'\"' + arg + r'\"'
-			else:
-				arg = arg.replace(' ', '\ ')
-		std_args.append(arg)
+		std_args = '"' + command + '"'
+	else:
+		args = shlex.split(command)
+		std_args = []
+		for arg in args:
+			arg = arg.replace(' ', '\ ')
+			std_args.append(arg)
 	print std_args
 	return std_args
 
