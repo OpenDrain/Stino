@@ -918,8 +918,10 @@ class Upload:
 		self.serial_port_list = smonitor.genSerialPortList()
 		
 		self.serial_monitor_is_running = False
-		if self.serial_port in self.serial_port_in_use_list:
-			self.serial_monitor_is_running = True
+		if self.serial_port_in_use_list:
+			if self.serial_port in self.serial_port_in_use_list:
+				self.serial_monitor = self.serial_port_monitor_dict[self.serial_port]
+				self.serial_monitor_is_running = True
 
 	def start(self):
 		self.cur_compilation.start()
@@ -938,8 +940,7 @@ class Upload:
 			if self.mode == 'upload':
 				upload_command = self.info_dict['upload.pattern']
 				if self.serial_monitor_is_running:
-					serial_monitor = self.serial_port_monitor_dict[self.serial_monitor]
-					serial_monitor.stop()
+					self.serial_monitor.stop()
 				if 'Leonardo' in self.board or 'Micro' in self.board:
 					new_serial_port = getNewSerialPort(self.serial_port, self.serial_port_list)
 					upload_command = upload_command.replace(self.serial_port, new_serial_port)
@@ -969,11 +970,12 @@ class Upload:
 				else:
 					msg = '[Stino - Uploading completed.]\n'
 					self.output_panel.addText(msg)
+				if self.mode == 'upload':
+					if self.serial_monitor_is_running:
+						self.serial_monitor.setSerialPort(self.serial_port)
+						self.serial_monitor.start()
 			else:
 				self.error_code = 3
-			if self.serial_monitor_is_running:
-				serial_monitor.setSerialPort(self.serial_port)
-				serial_monitor.start()
 		self.is_finished = True
 
 class BurnBootloader:

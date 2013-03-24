@@ -96,18 +96,18 @@ class SerialPortListener:
 class SerialMonitor:
 	def __init__(self, serial_port):
 		self.baudrate = int(const.settings.get('baudrate'))
+		self.ser = serial.Serial()
+		self.ser.baudrate = self.baudrate
 		self.setSerialPort(serial_port)
 		self.is_alive = False
 
 	def setSerialPort(serial_port):
 		self.serial_port = serial_port
+		self.ser.port = self.serial_port
 		self.name = 'Serial Monitor - ' + self.serial_port
 		self.view = stpanel.MonitorView(self.name)
 		self.view.toggleWordWrap()
-		self.ser = serial.Serial()
-		self.ser.port = self.serial_port
-		self.ser.baudrate = self.baudrate
-
+		
 	def start(self):
 		self.view.raiseToFront()
 		if not self.is_alive:
@@ -118,6 +118,7 @@ class SerialMonitor:
 
 	def stop(self):
 		if self.is_alive:
+			self.ser.close()
 			self.is_alive = False
 
 	def receive(self):
