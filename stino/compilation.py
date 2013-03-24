@@ -218,10 +218,6 @@ def getBoardInfoDict(info_block_list):
 def parseBoradInfo(board_file_path, board, board_type_value_dict):
 	info_block_list = genBoardInfoBlockList(board_file_path, board, board_type_value_dict)
 	(board_info_key_list, board_info_dict) = getBoardInfoDict(info_block_list)
-	if 'build.vid' in board_info_key_list:
-		if not 'build.extra_flags' in board_info_key_list:
-			board_info_key_list.append('build.extra_flags')
-			board_info_dict['build.extra_flags'] = '-DUSB_VID={build.vid} -DUSB_PID={build.pid}'
 	return (board_info_key_list, board_info_dict)
 
 def getProgrammerInfoBlock(programmer_file_path, programmer):
@@ -518,6 +514,11 @@ class Compilation:
 		info_dict = self.base_info_dict
 		info_dict = dict(info_dict, **board_info_dict)
 		info_dict = dict(info_dict, **programmer_info_dict)
+
+		if 'build.vid' in info_key_list:
+			if not 'build.extra_flags' in info_key_list:
+				info_key_list.append('build.extra_flags')
+				info_dict['build.extra_flags'] = '-DUSB_VID={build.vid} -DUSB_PID={build.pid}'
 		
 		for info_key in platform_info_key_list:
 			if info_key in info_key_list:
