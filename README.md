@@ -1,13 +1,13 @@
 #Stino
 ####A Sublime Text 2 Plugin for Arduino, Version 1.2
-Copyright (c) 2012-2-13 Robot-Will(robot.will.me (at) gmail.com). 
+Copyright (c) 2012-2013 Robot-Will(robot.will.me (at) gmail.com). 
 
 ## To all users
 I am still working on this plugin, and if you meet some problems or have suggestions, leave messages to me.
 Link: https://github.com/Robot-Will/Stino/issues
 
 ####Attention:
-If you met problems, please leave detailed information to me, including OS, board, etc.. You can find the error message in ST2 output panel. Use `<Ctrl+`>` to show the panel. If the commands in Arduino menu are gray, you may find error messages under the following line:
+If you met problems, please leave detailed information to me, including OS, board, etc.. You can find the error message in ST2 output panel. Use Ctrl+` to show the panel. If the commands in Arduino menu are gray, you may find error messages under the following line:
 
 >Reloading plugin G:\test dir\ST-1.2\Data\Packages\stino\stcommands.py
 
