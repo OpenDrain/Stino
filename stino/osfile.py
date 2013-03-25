@@ -116,12 +116,15 @@ def openUrlList(url_list):
 	for url in url_list:
 		openUrl(url)
 
-def genFileListFromPathList(path_list):
+def genFileListFromPathList(path_list, language):
 	file_list = []
 	for cur_path in path_list:
 		if ('Stino_Button' + utils.info_sep) in cur_path:
 			parent_path = utils.getInfoFromKey(cur_path)[1]
-			file_list.append('Select Current Folder (%s)' % parent_path)
+			display_text = 'Select Current Folder ({1})'
+			caption = language.translate(display_text)
+			caption = caption.replace('{1}', parent_path)
+			file_list.append(caption)
 		else:
 			cur_file = os.path.split(cur_path)[1]
 			if cur_file:

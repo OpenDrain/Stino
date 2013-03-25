@@ -304,7 +304,7 @@ def getSizeInfo(size_text):
 	ram_size = data_size + bss_size
 	return (flash_size, ram_size)
 
-def printSizeInfo(size_text, info_dict, output_panel):
+def printSizeInfo(size_text, info_dict, language, output_panel):
 	(flash_size, ram_size) = getSizeInfo(size_text)
 	
 	upload_maximum_size_text = info_dict['upload.maximum_size']
@@ -313,8 +313,8 @@ def printSizeInfo(size_text, info_dict, output_panel):
 	flash_size_percentage = (flash_size / upload_maximum_size) * 100
 	flash_size_text = formatNumber(flash_size_text)
 	upload_maximum_size_text = formatNumber(upload_maximum_size_text)
-	text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
-	msg = text
+	display_text = 'Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n'
+	msg = language.translate(display_text)
 	msg = msg.replace('{1}', flash_size_text)
 	msg = msg.replace('{2}', upload_maximum_size_text)
 	msg = msg.replace('{3}', '%.2f' % flash_size_percentage)
@@ -327,16 +327,17 @@ def printSizeInfo(size_text, info_dict, output_panel):
 		ram_size_percentage = (ram_size / upload_maximum_ram_size) * 100
 		ram_size_text = formatNumber(ram_size_text)
 		upload_maximum_ram_size_text = formatNumber(upload_maximum_ram_size_text)
-		text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
-		msg = text
+		display_text = 'Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n'
+		msg = msg = language.translate(display_text)
 		msg = msg.replace('{1}', ram_size_text)
 		msg = msg.replace('{2}', upload_maximum_ram_size_text)
 		msg = msg.replace('{3}', '%.2f' % ram_size_percentage)
 		output_panel.addText(msg)
 
-def runCommand(command, isSizeCommand, info_dict, output_panel, verbose_output):
+def runCommand(command, isSizeCommand, info_dict, language, output_panel, verbose_output):
 	args = genCommandArgs(command)
-	compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True)
+	compilation_process = subprocess.Popen(args, stdout = subprocess.PIPE, \
+		stderr = subprocess.PIPE, shell = True)
 	result = compilation_process.communicate()
 	return_code = compilation_process.returncode
 	stdout = result[0]
@@ -347,11 +348,10 @@ def runCommand(command, isSizeCommand, info_dict, output_panel, verbose_output):
 		output_panel.addText('\n')
 		if stdout:
 			output_panel.addText(stdout.decode(const.sys_encoding, 'replace'))
-			output_panel.addText('\n')
 
 	if isSizeCommand:
 		size_text = stdout
-		printSizeInfo(size_text, info_dict, output_panel)
+		printSizeInfo(size_text, info_dict, language, output_panel)
 
 	if stderr:
 		output_panel.addText(stderr.decode(const.sys_encoding, 'replace'))
@@ -464,7 +464,9 @@ class Compilation:
 	def compile(self):
 		self.postCompilationProcess()
 		if self.is_run_cmd:
-			self.output_panel.addText('Start compilation...\n')
+			display_text = 'Start compilation...\n'
+			msg = self.language.translate(display_text)
+			self.output_panel.addText(msg)
 			self.runCompile()
 		self.is_finished = True
 
@@ -472,12 +474,15 @@ class Compilation:
 		(main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
 		if main_src_number == 0:
 			self.error_code = 2
-			msg = 'Error: No main source file was found. A main source file should contain setup() and loop() functions.\n'
+			display_text = 'Error: No main source file was found. A main source file should contain setup() and loop() functions.\n'
+			msg = self.language.translate(display_text)
 			self.output_panel.addText(msg)
 			self.is_finished = True
 		elif main_src_number > 1:
 			self.error_code = 3
-			msg = 'Error: More than one (%d) main source files were found. A main source file contains setup() and loop() functions.\n' % main_src_number
+			display_text = 'Error: More than one ({1}) main source files were found. A main source file contains setup() and loop() functions.\n'
+			msg = self.language.translate(display_text)
+			msg = msg.replace('{1}', '%d' % main_src_number)
 			self.output_panel.addText(msg)
 			self.is_finished = True
 		else:
@@ -843,7 +848,8 @@ class Compilation:
 		self.compilation_command_list += size_command_list
 
 	def cleanObjFiles(self):
-		msg = '%(Cleaning)s...\n' % self.language.getTransDict()
+		display_text = 'Cleaning...\n'
+		msg = self.language.translate(display_text)
 		self.output_panel.addText(msg)
 		for file_path in self.created_file_list:
 			if os.path.isfile(file_path):
@@ -859,24 +865,26 @@ class Compilation:
 				if created_file == 'size':
 					isSizeCommand = True
 				else:
-					text = '%(Creating)s {1}...\n'
-					msg = text % self.language.getTransDict()
+					display_text = 'Creating {1}...\n'
+					msg = self.language.translate(display_text)
 					msg = msg.replace('{1}', created_file)
 					self.output_panel.addText(msg)
 			return_code = runCommand(compilation_command, isSizeCommand, self.info_dict, \
-				self.output_panel, self.verbose_compilation)
+				self.language, self.output_panel, self.verbose_compilation)
 			if return_code != 0:
 				termination_with_error = True
 				break
 		
 		if termination_with_error:
 			self.error_code = 4
-			msg = '[Stino - Compilation terminated with errors.]\n'
+			display_text = '[Stino - Compilation terminated with errors.]\n'
+			msg = self.language.translate(display_text)
 			self.output_panel.addText(msg)
 		else:
 			self.endtime = datetime.datetime.now()
 			interval = (self.endtime - self.starttime).microseconds * 1e-6
-			msg = '[Stino - Compilation completed.]\n'
+			display_text = '[Stino - Compilation completed.]\n'
+			msg = self.language.translate(display_text)
 			self.output_panel.addText(msg)
 			sublime.set_timeout(self.TurnFullCompilationOff, 0)
 
@@ -904,6 +912,7 @@ class Compilation:
 class Upload:
 	def __init__(self, language, arduino_info, menu, file_path, mode = 'upload', \
 		serial_port_in_use_list = None, serial_port_monitor_dict = None):
+		self.language = language
 		self.cur_compilation = Compilation(language, arduino_info, menu, file_path)
 		self.output_panel = self.cur_compilation.getOutputPanel()
 		self.error_code = 0
@@ -936,11 +945,15 @@ class Upload:
 		else:
 			self.info_dict = self.cur_compilation.getInfoDict()
 			self.hex_file_path = self.cur_compilation.getHexFilePath()
-			self.output_panel.addText('Start uploading %s...\n' % self.hex_file_path)
+			display_text = 'Start uploading {1}...\n'
+			msg = self.language.translate(display_text)
+			msg = msg.replace('{1}', self.hex_file_path)
+			self.output_panel.addText(msg)
 			if self.mode == 'upload':
 				upload_command = self.info_dict['upload.pattern']
 				if self.serial_monitor_is_running:
 					self.serial_monitor.stop()
+					time.sleep(0.1)
 				if 'Leonardo' in self.board or 'Micro' in self.board:
 					new_serial_port = getNewSerialPort(self.serial_port, self.serial_port_list)
 					upload_command = upload_command.replace(self.serial_port, new_serial_port)
@@ -959,16 +972,18 @@ class Upload:
 				for command in command_list:
 					isSizeCommand = False
 					return_code = runCommand(command, isSizeCommand, self.info_dict, \
-						self.output_panel, self.verbose_upload)
+						self.language, self.output_panel, self.verbose_upload)
 					if return_code != 0:
 						termination_with_error = True
 						break
 				if termination_with_error:
 					self.error_code = 2
-					msg = '[Stino - Uploading terminated with errors.]\n'
+					display_text = '[Stino - Uploading terminated with errors.]\n'
+					msg = self.language.translate(display_text)
 					self.output_panel.addText(msg)
 				else:
-					msg = '[Stino - Uploading completed.]\n'
+					display_text = '[Stino - Uploading completed.]\n'
+					msg = self.language.translate(display_text)
 					self.output_panel.addText(msg)
 				if self.mode == 'upload':
 					if self.serial_monitor_is_running:
@@ -980,6 +995,7 @@ class Upload:
 
 class BurnBootloader:
 	def __init__(self, language, arduino_info, menu, file_path):
+		self.language = language
 		self.cur_compilation = Compilation(language, arduino_info, menu, file_path, is_run_cmd = False)
 		self.output_panel = self.cur_compilation.getOutputPanel()
 		self.error_code = 0
@@ -999,7 +1015,10 @@ class BurnBootloader:
 		else:
 			self.info_dict = self.cur_compilation.getInfoDict()
 			if 'bootloader.file' in self.info_dict:
-				self.output_panel.addText('Start burning %s...\n' % self.info_dict['bootloader.file'])
+				display_text = 'Start burning {1}...\n'
+				msg = self.language.translate(display_text)
+				msg = msg.replace('{1}', self.info_dict['bootloader.file'])
+				self.output_panel.addText(msg)
 				termination_with_error = False
 				erase_command = self.info_dict['erase.pattern']
 				burn_command = self.info_dict['bootloader.pattern']
@@ -1007,16 +1026,18 @@ class BurnBootloader:
 				for command in command_list:
 					isSizeCommand = False
 					return_code = runCommand(command, isSizeCommand, self.info_dict, \
-						self.output_panel, self.verbose_upload)
+						self.language, self.output_panel, self.verbose_upload)
 					if return_code != 0:
 						termination_with_error = True
 						break
 				if termination_with_error:
 					self.error_code = 2
-					msg = '[Stino - Bootloader burning terminated with errors.]\n'
+					display_text = '[Stino - Bootloader burning terminated with errors.]\n'
+					msg = self.language.translate(display_text)
 					self.output_panel.addText(msg)
 				else:
-					msg = '[Stino - Bootloader burning completed.]\n'
+					display_text = '[Stino - Bootloader burning completed.]\n'
+					msg = self.language.translate(display_text)
 					self.output_panel.addText(msg)
 			else:
 				self.error_code = 3

@@ -95,7 +95,8 @@ class STMenu:
 					else:
 						menu_str = item
 					submenu_text += '\t'*5
-					submenu_text += '{"caption": "%s", "command": "%s", "args": {"menu_str": "%s"}' % (item, command, menu_str)
+					submenu_text += '{"caption": "%s", "command": "%s", "args": {"menu_str": "%s"}' \
+						% (item, command, menu_str)
 					if checkbox:
 						submenu_text += ', "checkbox": true'
 					submenu_text += '},\n'
@@ -153,7 +154,7 @@ class STMenu:
 		platform_list = self.arduino_info.getPlatformList()
 		for platform in platform_list:
 			board_lists = self.arduino_info.getBoardLists(platform)
-			menu_caption = platform
+			menu_caption = platform.replace('Boards', '%(Board)s')
 			menu_text += self.genSubMenuBlock(menu_caption, board_lists, command, menu_base = platform, checkbox = True)
 		return menu_text
 
@@ -166,6 +167,10 @@ class STMenu:
 		for board_type in board_type_list:
 			item_list = self.arduino_info.getBoardItemList(platform, board, board_type)
 			menu_caption = self.arduino_info.getPlatformTypeCaption(platform, board_type)
+			menu_caption = menu_caption.replace('Processor', '%(Processor)s')
+			menu_caption = menu_caption.replace('USB Type', '%(USB_Type)s')
+			menu_caption = menu_caption.replace('CPU Speed', '%(CPU_Speed)s')
+			menu_caption = menu_caption.replace('Keyboard Layout', '%(Keyboard_Layout)s')
 			board_key = utils.genKey(board, platform)
 			type_key = utils.genKey(board_type, board_key)
 			menu_text += self.genSubMenuBlock(menu_caption, [item_list], command, menu_base = type_key, checkbox = True)
@@ -223,7 +228,7 @@ class STMenu:
 		return menu_text
 
 	def genLanguageMenuText(self):
-		language_list = self.language.getLanguageList()
+		language_list = self.language.getLanguageTextList()
 		menu_caption = '%(Language)s'
 		command = 'select_language'
 		menu_text = self.genSubMenuBlock(menu_caption, [language_list], command, checkbox = True)
@@ -302,7 +307,7 @@ class STMenu:
 		list_func = 'getBoardLists'
 		platform_list = self.arduino_info.getPlatformList()
 		for platform in platform_list:
-			command_caption = '%(Select)s ' + platform
+			command_caption = '%(Select)s ' + platform.replace('Boards', '%(Board)s')
 			command_text += self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform)
 		return command_text
 
@@ -317,6 +322,10 @@ class STMenu:
 		board_type_list = self.arduino_info.getBoardTypeList(platform, board)
 		for board_type in board_type_list:
 			board_type_caption = self.arduino_info.getPlatformTypeCaption(platform, board_type)
+			board_type_caption = board_type_caption.replace('Processor', '%(Processor)s')
+			board_type_caption = board_type_caption.replace('USB Type', '%(USB_Type)s')
+			board_type_caption = board_type_caption.replace('CPU Speed', '%(CPU_Speed)s')
+			board_type_caption = board_type_caption.replace('Keyboard Layout', '%(Keyboard_Layout)s')
 			command_caption = '%(Select)s ' + board_type_caption
 			command_text += self.genSelectItemText(command_caption, command, parent_mod, list_func, parameter1 = platform, parameter2 = board, parameter3 = board_type)
 		return command_text
@@ -354,7 +363,7 @@ class STMenu:
 
 	def genSelectLanguageCommandText(self):
 		command_text = ''
-		language_list = self.language.getLanguageList()
+		language_list = self.language.getLanguageTextList()
 		if language_list:
 			command_caption = '%(Select)s ' + '%(Language)s'
 			command = 'select_language'

@@ -21,7 +21,7 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 		self.with_button = with_button
 		self.extra_parameter = extra_parameter
 
-		file_list = stino.osfile.genFileListFromPathList(self.path_list)
+		file_list = stino.osfile.genFileListFromPathList(self.path_list, stino.cur_language)
 		self.window.show_quick_panel(file_list, self.on_done)
 
 	def on_done(self, index):
@@ -37,7 +37,7 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 		else:		
 			(self.level, self.path_list) = stino.osfile.enterSubDir(self.top_path_list, \
 				self.level, index, sel_path, with_files = self.with_files, with_button = self.with_button)
-			file_list = stino.osfile.genFileListFromPathList(self.path_list)
+			file_list = stino.osfile.genFileListFromPathList(self.path_list, stino.cur_language)
 			self.window.show_quick_panel(file_list, self.on_done)
 
 class SelectItemCommand(sublime_plugin.WindowCommand):
@@ -138,16 +138,18 @@ class ShowArduinoMenuCommand(sublime_plugin.WindowCommand):
 
 class NewSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = '%(Name_for_new_sketch:)s'
-		caption = text % stino.cur_language.getTransDict()
+		caption = '%(Name_for_new_sketch:)s'
+		caption = caption % stino.cur_language.getTransDict()
 		self.window.show_input_panel(caption, '', self.on_done, None, None)
 
 	def on_done(self, input_text):
 		if input_text:
 			filename = stino.osfile.regulariseFilename(input_text)
 			if stino.osfile.existsInSketchbook(filename):
-				text = 'Sketch %s exists, please use another file name.' % filename
-				stino.log_panel.addText(text)
+				display_text = 'Sketch {1} exists, please use another file name.\n'
+				msg = stino.language.translate(display_text)
+				msg = msg.replace('{1}', filename)
+				stino.log_panel.addText(msg)
 			else:
 				stino.src.createNewSketch(filename)
 				stino.arduino_info.sketchbookUpdate()
@@ -159,8 +161,8 @@ class OpenSketchCommand(sublime_plugin.WindowCommand):
 
 class NewToSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = '%(Name_for_new_file:)s'
-		caption = text % stino.cur_language.getTransDict()
+		caption = '%(Name_for_new_file:)s'
+		caption = caption % stino.cur_language.getTransDict()
 		self.window.show_input_panel(caption, '', self.on_done, None, None)
 
 	def on_done(self, input_text):
@@ -170,8 +172,10 @@ class NewToSketchCommand(sublime_plugin.WindowCommand):
 			folder_path = os.path.split(view_file_name)[0]
 			new_file_path = os.path.join(folder_path, filename)
 			if os.path.exists(new_file_path):
-				text = 'File %s exists, please use another file name.' % filename
-				stino.log_panel.addText(text)
+				display_text = 'File {1} exists, please use another file name.\n'
+				msg = stino.language.translate(display_text)
+				msg = msg.replace('{1}', filename)
+				stino.log_panel.addText(msg)
 			else:
 				stino.src.createNewFile(self.window, new_file_path)
 
@@ -193,8 +197,8 @@ class ShowSketchFolderCommand(sublime_plugin.WindowCommand):
 
 class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = '%(Name_for_new_sketch:)s'
-		caption = text % stino.cur_language.getTransDict()
+		caption = '%(Extra compilation flags:)s'
+		caption = caption % stino.cur_language.getTransDict()
 		extra_flags = stino.const.settings.get('extra_flags')
 		if (not extra_flags) or (len(extra_flags) < 2):
 			extra_flags = '-D'
@@ -220,7 +224,8 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_compilation = stino.compilation.Compilation(stino.cur_language, stino.arduino_info, stino.cur_menu, filename)
+		cur_compilation = stino.compilation.Compilation(stino.cur_language, stino.arduino_info, \
+			stino.cur_menu, filename)
 		cur_compilation.start()
 
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
@@ -345,7 +350,6 @@ class StartSerialMonitorCommand(sublime_plugin.WindowCommand):
 		serial_port = stino.const.settings.get('serial_port')
 		serial_port_list = stino.smonitor.genSerialPortList()
 		if serial_port in serial_port_list:
-			# if not serial_port in stino.serial_port_in_use_list:
 			if stino.smonitor.isSerialPortAvailable(serial_port):
 				state = True
 		return state
@@ -372,8 +376,8 @@ class StopSerialMonitorCommand(sublime_plugin.WindowCommand):
 
 class SendToSerialCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = '%(Send:)s'
-		self.caption = text % stino.cur_language.getTransDict()
+		caption = '%(Send:)s'
+		self.caption = caption % stino.cur_language.getTransDict()
 		self.window.show_input_panel(self.caption, '', self.on_done, None, None)
 		
 	def on_done(self, input_text):
@@ -433,7 +437,7 @@ class BurnBootloaderCommand(sublime_plugin.WindowCommand):
 
 class SelectLanguageCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		language = menu_str
+		language = stino.cur_language.getLanguageFromLanguageText(menu_str)
 		pre_language = stino.const.settings.get('language')
 		if language != pre_language:
 			stino.const.settings.set('language', language)
@@ -443,8 +447,9 @@ class SelectLanguageCommand(sublime_plugin.WindowCommand):
 
 	def is_checked(self, menu_str):
 		state = False
-		language = stino.const.settings.get('language')
-		if menu_str == language:
+		setting_language = stino.const.settings.get('language')
+		cur_language = stino.cur_language.getLanguageFromLanguageText(menu_str)
+		if cur_language == setting_language:
 			state = True
 		return state
 
@@ -508,8 +513,9 @@ class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 
 class AutoFormatCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = 'Parsing C++ source files is difficult and I do not finish it yet.\n'
-		stino.log_panel.addText(text)
+		display_text = 'Parsing C++ source files is difficult and I do not finish it yet.\n'
+		msg = stino.language.translate(display_text)
+		stino.log_panel.addText(msg)
 
 class ArchiveSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -529,8 +535,8 @@ class FixEncodingCommand(sublime_plugin.WindowCommand):
 		if filename:
 			state = True
 			if view.is_dirty():
-				text = '%(Discard_All_Changes)s'
-				msg = text % stino.cur_language.getTransDict()
+				display_text = 'Discard all changes and reload sketch?\n'
+				msg = stino.language.translate(display_text)
 				state = sublime.ok_cancel_dialog(msg)
 		
 			if state:
@@ -564,6 +570,6 @@ class FindInReferenceCommand(sublime_plugin.WindowCommand):
 
 class AboutStinoCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		text = '%(Stino)s'
-		msg = text % stino.cur_language.getTransDict()
+		display_text = 'Stino'
+		msg = stino.language.translate(display_text)
 		sublime.message_dialog(msg)
