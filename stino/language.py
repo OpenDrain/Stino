@@ -163,9 +163,12 @@ class Language:
 					self.trans_dict[key] = value
 
 	def translate(self, display_text):
+		display_text = display_text.replace('\n', '\\n')
+		display_text = utils.convertAsciiToUtf8(display_text)
 		trans_text = display_text
 		if display_text in self.trans_dict:
 			trans_text = self.trans_dict[display_text]
+		trans_text = trans_text.replace('\\n', '\n')
 		return trans_text
 
 	def getTransDict(self):
