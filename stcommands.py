@@ -228,7 +228,8 @@ class UploadBinaryCommand(sublime_plugin.WindowCommand):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
 		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, \
-			filename, stino.serial_port_in_use_list, stino.serial_port_monitor_dict)
+			filename, serial_port_in_use_list = stino.serial_port_in_use_list, \
+			serial_port_monitor_dict = stino.serial_port_monitor_dict)
 		cur_upload.start()
 
 	def is_enabled(self):
@@ -244,7 +245,8 @@ class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, filename, mode = 'upload_using_programmer')
+		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, \
+			stino.cur_menu, filename, mode = 'upload_using_programmer')
 		cur_upload.start()
 
 	def is_enabled(self):

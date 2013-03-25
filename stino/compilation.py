@@ -292,7 +292,6 @@ def genCommandArgs(command):
 		for arg in args:
 			arg = arg.replace(' ', '\ ')
 			std_args.append(arg)
-	print std_args
 	return std_args
 
 def getSizeInfo(size_text):
@@ -974,7 +973,7 @@ class Upload:
 				if self.mode == 'upload':
 					if self.serial_monitor_is_running:
 						self.serial_monitor.setSerialPort(self.serial_port)
-						self.serial_monitor.start()
+						sublime.set_timeout(self.serial_monitor.start, 0)
 			else:
 				self.error_code = 3
 		self.is_finished = True
