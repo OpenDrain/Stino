@@ -18,6 +18,7 @@ from stino import src
 from stino import stpanel
 from stino import arduino
 from stino import smonitor
+from stino import cpreprocessor
 
 ram_size_dict = {}
 ram_size_dict['attiny44'] = '256'
@@ -389,21 +390,21 @@ def genInsertionDelarationList(src_path_list):
 		declaration_list += src.genSrcDeclarationList(header_text)
 		function_list += src.genSrcFunctionList(body_text)
 
-	print 'declaration list'
-	print declaration_list
-	print 'function list'
-	print function_list
+	# print 'declaration list'
+	# print declaration_list
+	# print 'function list'
+	# print function_list
 
 	function_list = removeMainFunctionsFromList(function_list)
-	print function_list
+	# print function_list
 	
 	new_declaration_list = []
 	for function in function_list:
 		if not function in declaration_list:
 			if not function in new_declaration_list:
 				new_declaration_list.append(function)
-	print 'new declaration list'
-	print new_declaration_list
+	# print 'new declaration list'
+	# print new_declaration_list
 	return new_declaration_list
 
 def findDeclarationInsertionPosition(src_text):
@@ -582,7 +583,7 @@ class Compilation:
 		self.is_finished = True
 
 	def preCompilationProcess(self):
-		(main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
+		# (main_src_number, self.main_src_path) = self.genMainSrcFileInfo()
 		# if main_src_number == 0:
 		# 	self.error_code = 2
 		# 	display_text = 'Error: No main source file was found. A main source file should contain setup() and loop() functions.\n'
@@ -599,6 +600,7 @@ class Compilation:
 		# 	self.is_run_cmd = False
 		# 	self.is_finished = True
 		# else:
+		self.genMainSrcFileInfo()
 		self.checkBuildPath()
 		self.header_path_list = self.genHeaderPathList()
 		self.copyHeaderSrcFiles()
@@ -632,8 +634,8 @@ class Compilation:
 
 		info_key_list = board_info_key_list + programmer_info_key_list
 		info_dict = self.base_info_dict
-		info_dict = dict(info_dict, **board_info_dict)
-		info_dict = dict(info_dict, **programmer_info_dict)
+		info_dict.update(board_info_dict)
+		info_dict.update(programmer_info_dict)
 
 		if 'build.vid' in info_key_list:
 			if not 'build.extra_flags' in info_key_list:
@@ -759,21 +761,21 @@ class Compilation:
 
 	def genMainSrcFileInfo(self):
 		self.sketch_src_path_list = self.genSketchSrcPathList()
-		(main_src_number, main_src_path) = findMainSrcFile(self.sketch_src_path_list)
-		return (main_src_number, main_src_path)
+		# (main_src_number, main_src_path) = findMainSrcFile(self.sketch_src_path_list)
+		# return (main_src_number, main_src_path)
 
 	def genHeaderList(self):
 		src_header_list = []
 		for sketch_src_path in self.sketch_src_path_list:
 			src_text = osfile.readFileText(sketch_src_path)
 			header_list = src.genHeaderListFromSketchText(src_text)
-			print sketch_src_path
-			print header_list
+			# print sketch_src_path
+			# print header_list
 			src_header_list += header_list
 		src_header_list = utils.removeRepeatItemFromList(src_header_list)
 		self.src_header_list = src_header_list
-		print 'header_list'
-		print self.src_header_list
+		# print 'header_list'
+		# print self.src_header_list
 
 	def genIncludeLibraryPath(self):
 		self.genHeaderList()
@@ -802,8 +804,6 @@ class Compilation:
 				folder_path = os.path.join(lib_path, folder)
 				folder_path = folder_path.replace(os.path.sep, '/')
 				lib_sub_path_list.append(folder_path)
-		print 'sub folder'
-		print lib_sub_path_list
 		self.lib_path_list = lib_path_list
 		self.include_library_path_list = include_library_path_list + lib_path_list + lib_sub_path_list
 
@@ -832,9 +832,15 @@ class Compilation:
 
 	def genBuildMainSrcFile(self):
 		arduino_version = self.arduino_info.getVersion()
-		main_src_text = osfile.readFileText(self.main_src_path)
+		compilation_command = self.info_dict['recipe.cpp.o.pattern']
+		c_preprocessor = cpreprocessor.CPreprocessor(self.build_path, compilation_command, \
+			self.header_path_list, self.sketch_src_path_list)
+		c_preprocessor.run()
+		self.main_src_path = c_preprocessor.getMainSrcPath()
+		print 'main_src_path: %s' % self.main_src_path 
+		self.temp_src_path_list = c_preprocessor.getTempSrcPathList()
 		insertion_header_file_list = genInsertionHeaderFileList(self.src_header_list, self.header_path_list)
-		insertion_declaration_list = genInsertionDelarationList(self.sketch_src_path_list)
+		insertion_declaration_list = genInsertionDelarationList(self.temp_src_path_list)
 		insertion_src_text = genInsertionText(arduino_version, insertion_header_file_list, insertion_declaration_list)
 		build_src_text = genBuildSrcText(insertion_src_text, self.sketch_src_path_list, self.main_src_path)
 		
@@ -950,8 +956,8 @@ class Compilation:
 		(hex_file_path_list, hex_command_list) = self.genHexCommandInfo()
 		size_command_list = self.genSizeCommandList()
 
-		print sketch_obj_path_list
-		print sketch_command_list
+		# print sketch_obj_path_list
+		# print sketch_command_list
 
 		ar_file_path = ar_file_path_list[0]
 		if not os.path.isfile(ar_file_path):
