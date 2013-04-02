@@ -13,6 +13,26 @@ header_ext_list = ['.h', '.hpp']
 arduino_ext_list = ['.ino', '.pde']
 src_ext_list = ['.ino', '.pde', '.c', '.cc', '.cpp', '.cxx']
 
+def findSrcFileList(path):
+	path_list = []
+	file_list = osfile.listDir(path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in src_ext_list:
+			cur_file_path = os.path.join(path, cur_file)
+			path_list.append(cur_file_path)
+	return path_list
+
+def findHeaderFileList(path):
+	path_list = []
+	file_list = osfile.listDir(path, with_dirs = False)
+	for cur_file in file_list:
+		cur_file_ext = os.path.splitext(cur_file)[1]
+		if cur_file_ext in header_ext_list:
+			cur_file_path = os.path.join(path, cur_file)
+			path_list.append(cur_file_path)
+	return path_list
+
 def getTextFromView(view):
 	region = sublime.Region(0, view.size())
 	text = view.substr(region)
@@ -31,15 +51,22 @@ def getTextFromSketch(sketch):
 			sketch_text = sketch
 	return sketch_text
 
+def removeComments(src_text):
+	pattern_list = []
+	pattern_list += [r'//.*?$'] # single-line comment
+	pattern_list += [r'/\*.*?\*/'] # multi-line comment r'/\*[^*]*(?:\*(?!/)[^*]*)*\*/'
+	# pattern_list += [r"'.'"] # single-quoted character
+	# pattern_list += [r'"(?:[^"\\"]|\\.)*?"'] # double-quoted string
+	# pattern_list += [r'^\s*?#.*?$'] # pre-processor directive
+	for pattern_text in pattern_list:
+		pattern = re.compile(pattern_text, re.M|re.S)
+		src_text = pattern.sub('', src_text)
+	return src_text
+
 def genSimpleSrcText(src_text):
 	simple_src_text = ''
-
-	pattern_text = r'/\*[\S\s]*?\*/'
-	src_text = re.sub(pattern_text, '\n', src_text)
-	pattern_text = r'//[\S\s]*?\n'
-	src_text = re.sub(pattern_text, '\n', src_text)
-
-	src_text = src_text.replace('#', '\n#')
+	src_text = removeComments(src_text)
+	
 	src_text = src_text.replace('{', '\n{\n')
 	src_text = src_text.replace('}', '\n}\n')
 	src_lines = utils.convertTextToLines(src_text)
@@ -56,6 +83,7 @@ def genSimpleSrcText(src_text):
 			if '{' in line:
 				level += 1
 	simple_src_text = simple_src_text.replace(';', ';\n')
+	# simple_src_text = simple_src_text.replace('\n', ' ')
 	return simple_src_text
 
 def regulariseBlank(text):
@@ -69,49 +97,49 @@ def regulariseBlank(text):
 	text = text[:-1]
 	return text
 
-def regulariseFunctionName(function_name):
-	pattern_text = r'\S+'
-	word_list = re.findall(pattern_text, function_name)[-2:]
-
-	function_name = ''
-	for word in word_list:
-		function_name += word
-		function_name += ' '
-	function_name = function_name[:-1]
-	return function_name
-
 def regulariseFuctionText(function_text):
-	text = function_text.split(')')[-2]
-	text_list = text.split('(')
+	function_text = function_text[:-1]
+	text_list = function_text.split('(')
 	function_name = text_list[0].strip()
-	function_name = regulariseFunctionName(function_name)
+	function_name = regulariseBlank(function_name)
 	parameters = text_list[1].strip()
 	parameters = regulariseBlank(parameters)
 	function_text = function_name + ' (' + parameters + ')'
 	return function_text
 
 def genSrcDeclarationList(simple_src_text):
-	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?;'
-	declaration_list = re.findall(pattern_text, simple_src_text)
-	src_declaration_list = [declaration[:-1].strip() for declaration in declaration_list]
-	src_declaration_list = [regulariseFuctionText(declaration) for declaration in src_declaration_list]
+	pattern_text = r'^\s*?[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*?;)'
+	pattern = re.compile(pattern_text, re.M|re.S)
+	declaration_list = pattern.findall(simple_src_text)
+	src_declaration_list = [regulariseFuctionText(declaration) for declaration in declaration_list]
+	# print src_declaration_list
 	return src_declaration_list
 
 def genSrcFunctionList(simple_src_text):
 	src_function_list = []
-	pattern_text = r'\S+?\s+?\S+?\s*?\([\S\s]*?\)\s*?\{\s*?}'
-	function_text_list = re.findall(pattern_text, simple_src_text)
+	pattern_text = r'^\s*?[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*?\{)'
+	pattern = re.compile(pattern_text, re.M|re.S)
+	function_text_list = pattern.findall(simple_src_text)
 	for function_text in function_text_list:
-		function = function_text.split('{')[0].strip()
-		function = regulariseFuctionText(function)
+		function = regulariseFuctionText(function_text)
 		src_function_list.append(function)
+	# print src_function_list
 	return src_function_list
 
 def isMainSrcText(src_text):
 	state = False
-	simple_src_text = genSimpleSrcText(src_text)
-	src_function_list = genSrcFunctionList(simple_src_text)
-	if 'void setup ()' in src_function_list and 'void loop ()' in src_function_list:
+	pattern_text = r'void\s+?setup\s*?\(.*?\)(?=\s*?\{)'
+	
+	setup_match = None
+	setup_pattern = re.compile(pattern_text, re.M|re.S)
+	setup_match = setup_pattern.search(src_text)
+
+	pattern_text = r'void\s+?loop\s*?\(.*?\)(?=\s*?\{)'
+
+	loop_pattern = re.compile(pattern_text, re.M|re.S)
+	loop_match = loop_pattern.search(src_text)
+
+	if setup_match and loop_match:
 		state = True
 	return state
 
@@ -127,10 +155,10 @@ def isSketch(sketch):
 		if os.path.isfile(sketch):
 			sketch_ext = os.path.splitext(sketch)[1]		
 	
-	if sketch_ext in arduino_ext_list:
+	if sketch_ext in src_ext_list or sketch_ext in header_ext_list:
 		state = True
-	else:
-		state = isMainSketch(sketch)
+	# else:
+	# 	state = isMainSketch(sketch)
 	return state
 
 def isMainSketch(sketch):
@@ -155,16 +183,9 @@ def createNewSketch(filename):
 def openSketch(sketch):
 	sketchbook_root = const.settings.get('sketchbook_root')
 	folder_path = os.path.join(sketchbook_root, sketch)
-	full_file_list = osfile.listDir(folder_path, with_dirs = False)
-
-	file_list = []
-	for cur_file in full_file_list:
-		cur_file_ext = os.path.splitext(cur_file)[1]
-		if cur_file_ext in src_ext_list:
-			file_list.append(cur_file)
-
-	file_path_list = [os.path.join(folder_path, cur_file) for cur_file in file_list]
-
+	file_path_list = findSrcFileList(folder_path)
+	file_path_list += findHeaderFileList(folder_path)
+	
 	sublime.run_command('new_window')
 	window = sublime.windows()[-1]
 
@@ -181,8 +202,12 @@ def getSketchFolderPathFromSketchbook(file_path):
 	sketchbook_root = const.settings.get('sketchbook_root')
 	file_path = file_path.replace(sketchbook_root, '')
 	file_path = file_path[1:]
-	folder = file_path.split(os.path.sep)[0]
-	folder_path = os.path.join(sketchbook_root, folder)
+	info_list = file_path.split(os.path.sep)
+	if len(info_list) > 1:
+		folder = info_list[0]
+		folder_path = os.path.join(sketchbook_root, folder)
+	else:
+		folder_path = sketchbook_root
 	return folder_path
 
 def hasMainSketchInFolder(folder_path):
@@ -224,14 +249,9 @@ def getSketchNameFromFolder(sketch_folder_path):
 	return sketch_name
 
 def genHeaderListFromSketchText(sketch_text):
-	header_list = []
-	simple_src_text = genSimpleSrcText(sketch_text)
-	pattern_text = r'#include\s+?["<]\S+?[>"]'
-	include_header_list = re.findall(pattern_text, simple_src_text)
-	for include_header in include_header_list:
-		header = include_header.replace('#include', '').strip()
-		header = header[1:-1]
-		header_list.append(header)
+	pattern_text = r'^\s*?#include\s+?["<](\S+?)[>"]'
+	pattern = re.compile(pattern_text, re.M|re.S)
+	header_list = pattern.findall(sketch_text)
 	return header_list
 
 def genHeaderListFromSketch(sketch):
@@ -258,19 +278,67 @@ def getIncludeHeaderList(folder_path, view):
 	return header_list
 
 def getIncludeHeaderText(folder_path, view):
-	header_list = getIncludeHeaderList(folder_path, view)
-	include_header_list = [('#include <' + header + '>\n') for header in header_list]
 	include_text = ''
-	for include_header in include_header_list:
-		include_text += include_header
-	if include_text:
-		include_text += '\n'
+	header_list = getIncludeHeaderList(folder_path, view)
+	if header_list:
+		include_header_list = [('#include <' + header + '>\n') for header in header_list]
+		include_text = '\n'
+		for include_header in include_header_list:
+			include_text += include_header
 	return include_text
+
+def splitSrcByFisrtFunction(src_text):
+	pattern_text = r'^\s*?[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*?\{)'
+	pattern = re.compile(pattern_text, re.M|re.S)
+	match = pattern.search(src_text)
+	if match:
+		first_function = match.group()
+		index = src_text.index(first_function)
+		header_text = src_text[:index]
+		body_text = src_text[index:]
+	else:
+		header_text = src_text
+		body_text = ''
+	return (header_text, body_text)
+
+def getHeaderInsertionPosition(text):
+	(header_text, body_text) = splitSrcByFisrtFunction(text)
+
+	pattern_list = []
+	pattern_list += [r'^\s*?#include.*?$'] # include
+	pattern_list += [r'^\s*?#.*?$'] # pre-processor directive
+	# pattern_list += [r'[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*;)'] # delaration
+	# pattern_list += [r'[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*\{)'] # function
+	
+	match = None
+	for pattern_text in pattern_list:
+		pattern = re.compile(pattern_text, re.M|re.S)
+		match = pattern.search(header_text)
+		if match:
+			break
+
+	position = 0
+	if match:
+		found_text = match.group()
+		index = text.index(found_text)
+		if index > 0:
+			position = index - 1
+	else:
+		pattern_text = r'/\*.*?\*/'
+		pattern = re.compile(pattern_text, re.M|re.S)
+		match = pattern.search(header_text)
+		if match:
+			found_text = match.group()
+			length = len(found_text)
+			index = text.index(found_text)
+			position = index + length
+	return position
 
 def insertLibraries(folder_path, view):
 	include_text = getIncludeHeaderText(folder_path, view)
 	edit = view.begin_edit()
-	position = 0
+	view_text = view.substr(sublime.Region(0, view.size()))
+	position = getHeaderInsertionPosition(view_text)
 	view.insert(edit, position, include_text)
 	view.end_edit(edit)
 
@@ -280,6 +348,7 @@ def openExample(path):
 	file_list = osfile.listDir(path, with_dirs = False)
 	for cur_file in file_list:
 		cur_file_ext = os.path.splitext(cur_file)[1]
-		if cur_file_ext in src_ext_list:
+		if cur_file_ext in src_ext_list or cur_file_ext in header_ext_list:
 			cur_file_path = os.path.join(path, cur_file)
 			window.open_file(cur_file_path)
+

@@ -147,7 +147,7 @@ class NewSketchCommand(sublime_plugin.WindowCommand):
 			filename = stino.osfile.regulariseFilename(input_text)
 			if stino.osfile.existsInSketchbook(filename):
 				display_text = 'Sketch {1} exists, please use another file name.\n'
-				msg = stino.language.translate(display_text)
+				msg = stino.cur_language.translate(display_text)
 				msg = msg.replace('{1}', filename)
 				stino.log_panel.addText(msg)
 			else:
@@ -158,6 +158,10 @@ class NewSketchCommand(sublime_plugin.WindowCommand):
 class OpenSketchCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		stino.src.openSketch(menu_str)
+
+	def is_enabled(self):
+		state = stino.const.settings.get('show_arduino_menu', False)
+		return state
 
 class NewToSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -173,11 +177,15 @@ class NewToSketchCommand(sublime_plugin.WindowCommand):
 			new_file_path = os.path.join(folder_path, filename)
 			if os.path.exists(new_file_path):
 				display_text = 'File {1} exists, please use another file name.\n'
-				msg = stino.language.translate(display_text)
+				msg = stino.cur_language.translate(display_text)
 				msg = msg.replace('{1}', filename)
 				stino.log_panel.addText(msg)
 			else:
 				stino.src.createNewFile(self.window, new_file_path)
+
+	def is_enabled(self):
+		state = stino.const.settings.get('show_arduino_menu', False)
+		return state
 
 class ImportLibraryCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
@@ -186,14 +194,23 @@ class ImportLibraryCommand(sublime_plugin.WindowCommand):
 		library_path = stino.arduino_info.getLibraryPath(platform, library)
 		stino.src.insertLibraries(library_path, view)
 
+	def is_enabled(self):
+		state = stino.const.settings.get('show_arduino_menu', False)
+		return state
+
 class ShowSketchFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		filename = self.window.active_view().file_name()
 		if filename:
-			sketch_folder_path = stino.src.getSketchFolderPath(filename)
+			# sketch_folder_path = stino.src.getSketchFolderPath(filename)
+			sketch_folder_path = os.path.split(filename)[0]
 			self.window.run_command('show_file_explorer_panel', {'top_path_list':[sketch_folder_path], \
 				'condition_mod':'osfile', 'condition_func':'isFile', 'function_mod':'osfile', \
 				'function_func':'openFile'})
+
+	def is_enabled(self):
+		state = stino.const.settings.get('show_arduino_menu', False)
+		return state
 
 class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -228,6 +245,10 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 			stino.cur_menu, filename)
 		cur_compilation.start()
 
+	def is_enabled(self):
+		state = stino.const.settings.get('show_arduino_menu', False)
+		return state
+
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
@@ -244,6 +265,8 @@ class UploadBinaryCommand(sublime_plugin.WindowCommand):
 			serial_port_list = stino.smonitor.genSerialPortList()
 			if not serial_port_list:
 				state = False
+		show_state = stino.const.settings.get('show_arduino_menu', False)
+		state = state and show_state
 		return state
 
 class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
@@ -260,6 +283,8 @@ class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
 		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
 		if programmer_lists:
 			state = True
+		show_state = stino.const.settings.get('show_arduino_menu', False)
+		state = state and show_state
 		return state
 
 class SelectBoardCommand(sublime_plugin.WindowCommand):
@@ -433,6 +458,8 @@ class BurnBootloaderCommand(sublime_plugin.WindowCommand):
 		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
 		if programmer_lists:
 			state = True
+		show_state = stino.const.settings.get('show_arduino_menu', False)
+		state = state and show_state
 		return state
 
 class SelectLanguageCommand(sublime_plugin.WindowCommand):
@@ -513,9 +540,7 @@ class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 
 class AutoFormatCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		display_text = 'Parsing C++ source files is difficult and I do not finish it yet.\n'
-		msg = stino.language.translate(display_text)
-		stino.log_panel.addText(msg)
+		self.window.run_command('reindent', {'single_line': False})
 
 class ArchiveSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
@@ -536,7 +561,7 @@ class FixEncodingCommand(sublime_plugin.WindowCommand):
 			state = True
 			if view.is_dirty():
 				display_text = 'Discard all changes and reload sketch?\n'
-				msg = stino.language.translate(display_text)
+				msg = stino.cur_language.translate(display_text)
 				state = sublime.ok_cancel_dialog(msg)
 		
 			if state:
@@ -571,5 +596,5 @@ class FindInReferenceCommand(sublime_plugin.WindowCommand):
 class AboutStinoCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		display_text = 'Stino'
-		msg = stino.language.translate(display_text)
+		msg = stino.cur_language.translate(display_text)
 		sublime.message_dialog(msg)

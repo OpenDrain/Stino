@@ -1,5 +1,5 @@
-# LANGUAGE: English (English)
-# English translations for Stino Plugin.
+# LANGUAGE: Wikang Tagalog (Tagalog)
+# Tagalog translations for Stino Plugin.
 # Copyright (C) 2013 Robot-Will
 # This file is distributed under the same license as the Stino Plugin.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
@@ -8,9 +8,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stino 1.2\n"
 "POT-Creation-Date: 2013-02-27 11:34+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"PO-Revision-Date: 2013-03-26 13:00+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language-Team: Tagalog <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UNICODE\n"
 "Content-Transfer-Encoding: UTF-8\n"
@@ -21,9 +21,6 @@ msgstr "Sketchbook"
 
 msgid "Start burning {1}...\n"
 msgstr "Start burning {1}...\n"
-
-msgid "Gathering compilation infomation...\n"
-msgstr "Gathering compilation infomation...\n"
 
 msgid "Add_Extra_Flags"
 msgstr "Add Extra Flags"
@@ -44,7 +41,7 @@ msgid "Serial_Port"
 msgstr "Serial Port"
 
 msgid "Send"
-msgstr "Send"
+msgstr "Ipadala"
 
 msgid "Full_Compilation"
 msgstr "Full Compilation"
@@ -59,13 +56,13 @@ msgid "Sketchbook folder have switched to {1}.\n"
 msgstr "Sketchbook folder have switched to {1}.\n"
 
 msgid "Find_in_Reference"
-msgstr "Find in Reference"
+msgstr "Hanapin sa Sanggunian"
 
 msgid "Board"
 msgstr "Board"
 
 msgid "Upload_Using_Programmer"
-msgstr "Upload Using Programmer"
+msgstr "I-upload gamit ang Programmer"
 
 msgid "[Stino - Bootloader burning terminated with errors.]\n"
 msgstr "[Stino - Bootloader burning terminated with errors.]\n"
@@ -74,7 +71,7 @@ msgid "USB_Type"
 msgstr "USB Type"
 
 msgid "Preferences"
-msgstr "Preferences"
+msgstr "Mga Kagustuhan"
 
 msgid "Sketch {1} exists, please use another file name.\n"
 msgstr "Sketch {1} exists, please use another file name.\n"
@@ -89,7 +86,7 @@ msgid "Compilation"
 msgstr "Compilation"
 
 msgid "Troubleshooting"
-msgstr "Troubleshooting"
+msgstr "Mga Sagot sa Problema"
 
 msgid "Stop"
 msgstr "Stop"
@@ -110,16 +107,16 @@ msgid "[Stino - Uploading completed.]\n"
 msgstr "[Stino - Uploading completed.]\n"
 
 msgid "Upload"
-msgstr "Upload"
+msgstr "I-upload"
 
 msgid "Show_Sketch_Folder"
-msgstr "Show Sketch Folder"
+msgstr "Ipakita ang Sketch Folder"
 
 msgid "Error: No main source file was found. A main source file should contain setup() and loop() functions.\n"
 msgstr "Error: No main source file was found. A main source file should contain setup() and loop() functions.\n"
 
 msgid "Fix_Encoding_&_Reload"
-msgstr "Fix Encoding & Reload"
+msgstr "Itama ang Encoding at I-reload"
 
 msgid "About_Stino"
 msgstr "About Stino"
@@ -128,19 +125,19 @@ msgid "Show_Arduino_Menu"
 msgstr "Show Arduino Menu"
 
 msgid "Tools"
-msgstr "Tools"
+msgstr "Mga Kasangkapan"
 
 msgid "Cleaning...\n"
 msgstr "Cleaning...\n"
 
 msgid "Examples"
-msgstr "Examples"
+msgstr "Mga Halimbawa"
 
 msgid "Select Current Folder ({1})"
 msgstr "Select Current Folder ({1})"
 
 msgid "Verify_code_after_upload"
-msgstr "Verify code after upload"
+msgstr "I-verify ang code pagkatapos mai-upload"
 
 msgid "OFF"
 msgstr "OFF"
@@ -158,13 +155,13 @@ msgid "Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n"
 msgstr "Binary sketch size: {1} bytes (of a {2} byte maximum, {3}%).\n"
 
 msgid "Frequently_Asked_Questions"
-msgstr "Frequently Asked Questions"
+msgstr "Mga Karaniwang Tanong"
 
 msgid "Keyboard_Layout"
 msgstr "Keyboard Layout"
 
 msgid "Burn_Bootloader"
-msgstr "Burn Bootloader"
+msgstr "Ilagay ang Bootloader"
 
 msgid "Select_Arduino_Folder..."
 msgstr "Select Arduino Folder..."
@@ -191,13 +188,13 @@ msgid "Example"
 msgstr "Example"
 
 msgid "Getting_Started"
-msgstr "Getting Started"
+msgstr "Mga Patnubay sa Pagsisimula"
 
 msgid "ON"
 msgstr "ON"
 
 msgid "Reference"
-msgstr "Reference"
+msgstr "Sanggunian"
 
 msgid "Stino"
 msgstr "Stino"
@@ -224,7 +221,7 @@ msgid "[Stino - Compilation terminated with errors.]\n"
 msgstr "[Stino - Compilation terminated with errors.]\n"
 
 msgid "Verify / Compile"
-msgstr "Verify / Compile"
+msgstr "Beripikahin / I-compile"
 
 msgid "New_Sketch..."
 msgstr "New Sketch..."
@@ -236,13 +233,13 @@ msgid "Discard all changes and reload sketch?\n"
 msgstr "Discard all changes and reload sketch?\n"
 
 msgid "Import_Library..."
-msgstr "Import Library..."
+msgstr "Humango ng Library..."
 
 msgid "Open_Sketch"
 msgstr "Open Sketch"
 
 msgid "Name_for_new_file:"
-msgstr "Name for new file:"
+msgstr "Pangalan para sa bagong file:"
 
 msgid "Programmer"
 msgstr "Programmer"
@@ -251,7 +248,7 @@ msgid "Visit_Arduino_Website"
 msgstr "Visit Arduino Website"
 
 msgid "Open"
-msgstr "Open"
+msgstr "Buksan"
 
 msgid "Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n"
 msgstr "Estimated memory use: {1} bytes (of a {2} byte maximum, {3}%).\n"
@@ -261,4 +258,7 @@ msgstr "Select"
 
 msgid "Show_Verbose_Output"
 msgstr "Show Verbose Output"
+
+msgid "Gathering compilation infomation...\n"
+msgstr "Gathering compilation infomation...\n"
 
