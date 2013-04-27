@@ -1,11 +1,34 @@
 #-*- coding: utf-8 -*-
 # stino/stcommands.py
 
+import sys
+import os
+import inspect
+
 import sublime
 import sublime_plugin
-import os
-import stino
-import time
+
+# Get the path where Stino is.
+plugin_path = inspect.stack()[0][1]
+stino_root = os.path.split(plugin_path)[0]
+sys.path.append(stino_root)
+
+from stino import const
+from stino import globalvars
+from stino import textutil
+from stino import fileutil
+from stino import stpanel
+from stino import sketch
+from stino import src
+from stino import actions
+
+class StinoInsertTextCommand(sublime_plugin.TextCommand):
+	def run(self, edit, position, text = ''):
+		self.view.insert(edit, position, text)
+
+class StinoReplaceTextCommand(sublime_plugin.TextCommand):
+	def run(self, edit, text = ''):
+		self.view.replace(edit, sublime.Region(0, self.view.size()), text)
 
 class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 	def run(self, top_path_list, condition_mod, condition_func, function_mod, function_func, \
@@ -13,15 +36,15 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 		self.level = 0
 		self.top_path_list = top_path_list
 		self.path_list = top_path_list
-		self.condition_module = getattr(stino, condition_mod)
+		self.condition_module = sys.modules['stino.' + condition_mod]
 		self.condition_func = condition_func
-		self.function_module = getattr(stino, function_mod)
+		self.function_module = sys.modules['stino.' + function_mod]
 		self.function_func = function_func
 		self.with_files = with_files
 		self.with_button = with_button
 		self.extra_parameter = extra_parameter
 
-		file_list = stino.osfile.genFileListFromPathList(self.path_list, stino.cur_language)
+		file_list = fileutil.genFileListFromPathList(self.path_list, globalvars.cur_language)
 		self.window.show_quick_panel(file_list, self.on_done)
 
 	def on_done(self, index):
@@ -35,44 +58,56 @@ class ShowFileExplorerPanelCommand(sublime_plugin.WindowCommand):
 			else:
 				getattr(self.function_module, self.function_func)(sel_path)
 		else:		
-			(self.level, self.path_list) = stino.osfile.enterSubDir(self.top_path_list, \
+			(self.level, self.path_list) = fileutil.enterSubDir(self.top_path_list, \
 				self.level, index, sel_path, with_files = self.with_files, with_button = self.with_button)
-			file_list = stino.osfile.genFileListFromPathList(self.path_list, stino.cur_language)
-			self.window.show_quick_panel(file_list, self.on_done)
+			file_list = fileutil.genFileListFromPathList(self.path_list, globalvars.cur_language)
+			sublime.set_timeout(lambda: self.window.show_quick_panel(file_list, self.on_done), 0)
 
 class SelectItemCommand(sublime_plugin.WindowCommand):
 	def run(self, command, parent_mod, list_func, parameter1, parameter2, parameter3):
-		parent_mod = getattr(stino, parent_mod) 
-		func = getattr(parent_mod, list_func)
+		parent_mod = sys.modules['stino.' + parent_mod]
+		attr_list = list_func.split('.')
+		for attr in attr_list:
+			func = getattr(parent_mod, attr)
+			parent_mod = func
 		self.parameter1 = parameter1
 		self.parameter2 = parameter2
 		self.parameter3 = parameter3
 		self.command = command
+
+		all_info_list = []
+		self.menu_str_list = []
+
 		if self.parameter1 and self.parameter3:
-			self.info_list = func(self.parameter1, self.parameter2, self.parameter3)
+			info_list = func(self.parameter1, self.parameter2, self.parameter3)
+			info_list = textutil.simplifyLists(info_list)
+			for item in info_list:
+				menu_str = textutil.genKey(self.parameter1, self.parameter2)
+				menu_str = textutil.genKey( menu_str, self.parameter3)
+				menu_str = textutil.genKey(menu_str, item)
+				self.menu_str_list.append(menu_str)
+			all_info_list = info_list
 		elif self.parameter1:
-			self.info_list = func(self.parameter1)
+			platform_list = ['common', self.parameter1]
+			for platform in platform_list:
+				info_list = func(platform)
+				info_list = textutil.simplifyLists(info_list)
+				for item in info_list:
+					menu_str = textutil.genKey(platform, item)
+					self.menu_str_list.append(menu_str)
+				all_info_list += info_list
 		else:
-			self.info_list = func()
-		if stino.utils.isLists(self.info_list):
-			self.info_list = stino.utils.simplifyLists(self.info_list)
-		self.window.show_quick_panel(self.info_list, self.on_done)
+			info_list = func()
+			self.menu_str_list = info_list
+			all_info_list = info_list
+		self.window.show_quick_panel(all_info_list, self.on_done)
 
 	def on_done(self, index):
 		if index == -1:
 			return
 			
-		sel_item = self.info_list[index]
-		if self.parameter1 and self.parameter3:
-			menu_str = stino.utils.genKey(self.parameter2, self.parameter1)
-			menu_str = stino.utils.genKey(self.parameter3, menu_str)
-			menu_str = stino.utils.genKey(sel_item, menu_str)
-		elif self.parameter1:
-			menu_str = stino.utils.genKey(sel_item, self.parameter1)
-		else:
-			menu_str = sel_item
-
-		self.window.run_command(self.command, {'menu_str': menu_str})
+		menu_str = self.menu_str_list[index]
+		sublime.set_timeout(lambda: self.window.run_command(self.command, {'menu_str': menu_str}), 0)
 
 class NotEnabledCommand(sublime_plugin.WindowCommand):
 	def is_enabled(self):
@@ -80,284 +115,267 @@ class NotEnabledCommand(sublime_plugin.WindowCommand):
 
 class SketchListener(sublime_plugin.EventListener):
 	def on_new(self, view):
-		stino.const.settings.set('show_arduino_menu', False)
-		stino.const.settings.set('show_serial_monitor_menu', False)
-		stino.cur_menu.update()
-		stino.serial_listener.stop()
-		stino.status_info.setView(view)
-		stino.status_info.update()
+		const.settings.set('show_arduino_menu', False)
+		const.settings.set('show_serial_monitor_menu', False)
+	# 	cur_menu.update()
+	# 	serial_listener.stop()
+	# 	status_info.setView(view)
+	# 	status_info.update()
 
 	def on_activated(self, view):
-		if not stino.stpanel.isPanel(view):
-			pre_state = stino.const.settings.get('show_arduino_menu')
-			filename = view.file_name()
-			
-			sketch = view
-			if filename:
-				if not view.is_dirty():
-					sketch = filename
-
-			state = stino.src.isSketch(sketch)
+		if not stpanel.isPanel(view):
+			pre_state = const.settings.get('show_arduino_menu')
+			file_path = view.file_name()
+			state = sketch.isArduinoSrcFile(file_path)
 			if state:
-				global_setting = stino.const.settings.get('global_setting')
+				global_setting = const.settings.get('global_setting')
 				if not global_setting:
-					pre_setting_folder_path = stino.const.settings.get('pre_setting_folder_path')
-					file_path = view.file_name()
+					pre_setting_folder_path = const.settings.get('setting_folder_path')
 					setting_folder_path = os.path.split(file_path)[0]
 					
 					if setting_folder_path != pre_setting_folder_path:
-						stino.const.settings.changeSettingFileFolder(setting_folder_path)
-						stino.arduino_info.update()
-						stino.cur_menu.fullUpdate()
-						stino.const.settings.set('pre_setting_folder_path', setting_folder_path)
+						const.settings.changeSettingFileFolder(setting_folder_path)
+						globalvars.arduino_info.update()
+						globalvars.menu.update()
 
 			if state != pre_state:
-				stino.const.settings.set('show_arduino_menu', state)
-				stino.cur_menu.update()
+				const.settings.set('show_arduino_menu', state)
+				globalvars.menu.update()
 
-				if state:
-					stino.serial_listener.start()
-				else:
-					stino.serial_listener.stop()
+	# 			if state:
+	# 				serial_listener.start()
+	# 			else:
+	# 				serial_listener.stop()
 
-			pre_state = stino.const.settings.get('show_serial_monitor_menu')
-			state = stino.smonitor.isMonitorView(view)
-			if state != pre_state:
-				stino.const.settings.set('show_serial_monitor_menu', state)
-				stino.cur_menu.update()
-				view.window().run_command('send_to_serial')
+	# 		pre_state = const.settings.get('show_serial_monitor_menu')
+	# 		state = smonitor.isMonitorView(view)
+	# 		if state != pre_state:
+	# 			const.settings.set('show_serial_monitor_menu', state)
+	# 			cur_menu.update()
+	# 			view.window().run_command('send_to_serial')
 
-			stino.status_info.setView(view)
-			stino.status_info.update()
+	# 		status_info.setView(view)
+	# 		status_info.update()
 
-	def on_close(self, view):
-		if stino.smonitor.isMonitorView(view):
-			name = view.name()
-			serial_port = name.split('-')[1].strip()
-			if serial_port in stino.serial_port_monitor_dict:
-				serial_monitor = stino.serial_port_monitor_dict[serial_port]
-				serial_monitor.stop()
-				if serial_port in stino.serial_port_in_use_list:
-					stino.serial_port_in_use_list.remove(serial_port)
+	# def on_close(self, view):
+	# 	if smonitor.isMonitorView(view):
+	# 		name = view.name()
+	# 		serial_port = name.split('-')[1].strip()
+	# 		if serial_port in serial_port_monitor_dict:
+	# 			serial_monitor = serial_port_monitor_dict[serial_port]
+	# 			serial_monitor.stop()
+	# 			if serial_port in serial_port_in_use_list:
+	# 				serial_port_in_use_list.remove(serial_port)
 
 class ShowArduinoMenuCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		show_arduino_menu = not stino.const.settings.get('show_arduino_menu')
-		stino.const.settings.set('show_arduino_menu', show_arduino_menu)
-		stino.cur_menu.update()
+		show_arduino_menu = not const.settings.get('show_arduino_menu')
+		const.settings.set('show_arduino_menu', show_arduino_menu)
+		globalvars.menu.update()
 
 	def is_checked(self):
-		state = stino.const.settings.get('show_arduino_menu')
+		state = const.settings.get('show_arduino_menu')
 		return state
 
 class NewSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		caption = '%(Name_for_new_sketch:)s'
-		caption = caption % stino.cur_language.getTransDict()
+		display_text = 'Name for new sketch:'
+		caption = globalvars.cur_language.translate(display_text)
 		self.window.show_input_panel(caption, '', self.on_done, None, None)
 
 	def on_done(self, input_text):
 		if input_text:
-			filename = stino.osfile.regulariseFilename(input_text)
-			if stino.osfile.existsInSketchbook(filename):
-				display_text = 'A sketch (or folder) named "{1}" already exists. Could not create the sketch.\n'
-				msg = stino.cur_language.translate(display_text)
-				msg = msg.replace('{1}', filename)
-				stino.log_panel.addText(msg)
+			filename = fileutil.regulariseFilename(input_text)
+			sketchbook_root = fileutil.getSketchbookRoot()
+			file_path = os.path.join(sketchbook_root, filename)
+			if os.path.exists(file_path):
+				display_text = 'A sketch (or folder) named "{0}" already exists. Could not create the sketch.\n'
+				globalvars.log_panel.addText(display_text, [filename])
 			else:
-				stino.src.createNewSketch(filename)
-				stino.arduino_info.sketchbookUpdate()
-				stino.cur_menu.update()
+				sketch.createNewSketch(file_path)
+				globalvars.menu.update()
 
 class OpenSketchCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		# sketchbook_root = stino.const.settings.get('sketchbook_root')
-		# folder_path = os.path.join(sketchbook_root, menu_str)
-		folder_path = stino.arduino_info.getSketchPath(menu_str)
-		if os.path.isdir(folder_path):
-			stino.src.openSketch(folder_path)
+		cur_sketch = menu_str
+		sketch_info = sketch.genSketchInfo()
+		sketch_path_dict = sketch_info[1]
+		
+		if cur_sketch in sketch_path_dict:
+			sketch.openSketch(sketch_path_dict[cur_sketch])
 		else:
-			display_text = 'The selected sketch no longer exists.\nYou may need to restart Sublime Text 2\nto update the sketchbook menu.\n'
-			msg = stino.cur_language.translate(display_text)
-			stino.log_panel.addText(msg)
-
-	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
-		return state
+			display_text = 'The selected sketch no longer exists. You may need to restart Sublime Text to update the sketchbook menu.\n'
+			globalvars.log_panel.addText(display_text)
 
 class SelectExampleCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		(example, platform) = stino.utils.getInfoFromKey(menu_str)
-		example_path = stino.arduino_info.getExamplePath(platform, example)
-		self.window.run_command('show_file_explorer_panel', {'top_path_list':[example_path], \
-				'condition_mod':'arduino', 'condition_func':'isSketchFolder', 'function_mod':'src', \
+		(example, platform) = textutil.getInfoFromKey(menu_str)
+		example_path = globalvars.arduino_info.getExamplePath(platform, example)
+		dir_list = fileutil.listDir(example_path, with_files = False)
+		dir_path_list = [os.path.join(example_path, cur_dir) for cur_dir in dir_list]
+		self.window.run_command('show_file_explorer_panel', {'top_path_list':dir_path_list, \
+				'condition_mod': 'sketch', 'condition_func':'isSketchFolder', 'function_mod': 'sketch', \
 				'function_func':'openSketch'})
 
 class NewToSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		caption = '%(Name_for_new_file:)s'
-		caption = caption % stino.cur_language.getTransDict()
+		display_text = 'Name for new file:'
+		caption = globalvars.cur_language.translate(display_text)
 		self.window.show_input_panel(caption, '', self.on_done, None, None)
 
 	def on_done(self, input_text):
 		if input_text:
-			filename = stino.osfile.regulariseFilename(input_text)
+			filename = fileutil.regulariseFilename(input_text)
 			view_file_name = self.window.active_view().file_name()
 			folder_path = os.path.split(view_file_name)[0]
 			new_file_path = os.path.join(folder_path, filename)
 			if os.path.exists(new_file_path):
-				display_text = 'A file named "{1}" already exists. Could not create the file.\n'
-				msg = stino.cur_language.translate(display_text)
-				msg = msg.replace('{1}', filename)
-				stino.log_panel.addText(msg)
+				display_text = 'A file named "{0}" already exists. Could not create the file.\n'
+				globalvars.log_panel.addText(display_text, [filename])
 			else:
-				stino.src.createNewFile(self.window, new_file_path)
+				sketch.createNewFile(self.window, new_file_path)
 
 	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
+		state = const.settings.get('show_arduino_menu', False)
 		return state
 
 class ImportLibraryCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		view = self.window.active_view()
-		(library, platform) = stino.utils.getInfoFromKey(menu_str)
-		library_path = stino.arduino_info.getLibraryPath(platform, library)
+		(library, platform) = textutil.getInfoFromKey(menu_str)
+		library_path = globalvars.arduino_info.getLibraryPath(platform, library)
 		if os.path.isdir(library_path):
-			stino.src.insertLibraries(library_path, view)
+			src.insertIncludeText(library_path, view)
 		else:
-			display_text = 'The selected library no longer exists.\nYou may need to restart Sublime Text 2\nto update the import library menu.\n'
-			msg = stino.cur_language.translate(display_text)
-			stino.log_panel.addText(msg)
+			display_text = 'The selected library no longer exists. You may need to restart Sublime Text to update the import library menu.\n'
+			globalvars.log_panel.addText(display_text)
 
 	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
+		state = const.settings.get('show_arduino_menu', False)
 		return state
 
 class ShowSketchFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		filename = self.window.active_view().file_name()
 		if filename:
-			# sketch_folder_path = stino.src.getSketchFolderPath(filename)
 			sketch_folder_path = os.path.split(filename)[0]
-			self.window.run_command('show_file_explorer_panel', {'top_path_list':[sketch_folder_path], \
-				'condition_mod':'osfile', 'condition_func':'isFile', 'function_mod':'osfile', \
+			dir_list = fileutil.listDir(sketch_folder_path)
+			dir_path_list = [os.path.join(sketch_folder_path, cur_dir) for cur_dir in dir_list]
+			self.window.run_command('show_file_explorer_panel', {'top_path_list':dir_path_list, \
+				'condition_mod':'sketch', 'condition_func':'isFile', 'function_mod':'sketch', \
 				'function_func':'openFile'})
 
 	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
+		state = const.settings.get('show_arduino_menu', False)
 		return state
 
 class ChangeExtraFlagsCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		caption = '%(Extra compilation flags:)s'
-		caption = caption % stino.cur_language.getTransDict()
-		extra_flags = stino.const.settings.get('extra_flags')
-		if (not extra_flags) or (len(extra_flags) < 2):
-			extra_flags = '-D'
+		display_text = 'Extra compilation flags:'
+		caption = globalvars.cur_language.translate(display_text)
+		extra_flags = const.settings.get('extra_flags', '')
 		self.window.show_input_panel(caption, extra_flags, self.on_done, None, None)
 
 	def on_done(self, input_text):
 		extra_flags = input_text
-		if (not extra_flags) or (len(extra_flags) < 3):
-			extra_flags = ''
-		stino.const.settings.set('extra_flags', extra_flags)
+		const.settings.set('extra_flags', extra_flags)
 
 	def description(self):
-		extra_flags = stino.const.settings.get('extra_flags')
-		if (not extra_flags) or (len(extra_flags) < 2):
-			caption = '%(Add_Extra_Flags)s'
+		extra_flags = const.settings.get('extra_flags', '')
+		if not extra_flags:
+			display_text = 'Add Extra Flags'
 		else:
-			caption = '%(Change_Extra_Flags)s'
-		caption = caption % stino.cur_language.getTransDict()
+			display_text = 'Change Extra Flags'
+		caption = globalvars.cur_language.translate(display_text)
 		return caption
 
 class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_compilation = stino.compilation.Compilation(stino.cur_language, stino.arduino_info, \
-			stino.cur_menu, filename)
-		cur_compilation.start()
+		# cur_compilation = compilation.Compilation(cur_language, arduino_info, \
+		# 	cur_menu, filename)
+		# cur_compilation.start()
 
 	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
+		state = const.settings.get('show_arduino_menu', False)
 		return state
 
 class UploadBinaryCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, stino.cur_menu, \
-			filename, serial_port_in_use_list = stino.serial_port_in_use_list, \
-			serial_port_monitor_dict = stino.serial_port_monitor_dict)
-		cur_upload.start()
+		# cur_upload = compilation.Upload(cur_language, arduino_info, cur_menu, \
+		# 	filename, serial_port_in_use_list = serial_port_in_use_list, \
+		# 	serial_port_monitor_dict = serial_port_monitor_dict)
+		# cur_upload.start()
 
-	def is_enabled(self):
-		state = True
-		platform = stino.const.settings.get('platform')
-		if 'AVR' in platform:
-			serial_port_list = stino.smonitor.genSerialPortList()
-			if not serial_port_list:
-				state = False
-		show_state = stino.const.settings.get('show_arduino_menu', False)
-		state = state and show_state
-		return state
+	# def is_enabled(self):
+	# 	state = True
+	# 	platform = const.settings.get('platform')
+	# 	if 'AVR' in platform:
+	# 		serial_port_list = smonitor.genSerialPortList()
+	# 		if not serial_port_list:
+	# 			state = False
+	# 	show_state = const.settings.get('show_arduino_menu', False)
+	# 	state = state and show_state
+	# 	return state
 
 class UploadUsingProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_upload = stino.compilation.Upload(stino.cur_language, stino.arduino_info, \
-			stino.cur_menu, filename, mode = 'upload_using_programmer')
-		cur_upload.start()
+		# cur_upload = compilation.Upload(cur_language, arduino_info, \
+		# 	cur_menu, filename, mode = 'upload_using_programmer')
+		# cur_upload.start()
 
 	def is_enabled(self):
 		state = False
-		platform = stino.const.settings.get('platform')
-		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
-		if programmer_lists:
-			state = True
-		show_state = stino.const.settings.get('show_arduino_menu', False)
-		state = state and show_state
+		platform = const.settings.get('platform')
+		# programmer_lists = arduino_info.getProgrammerLists(platform)
+		# if programmer_lists:
+		# 	state = True
+		# show_state = const.settings.get('show_arduino_menu', False)
+		# state = state and show_state
 		return state
 
 class SelectBoardCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		(board, platform) = stino.utils.getInfoFromKey(menu_str)
-		pre_platform = stino.const.settings.get('platform')
-		pre_board = stino.const.settings.get('board')
+		(board, platform) = textutil.getInfoFromKey(menu_str)
+		pre_platform = const.settings.get('platform')
+		pre_board = const.settings.get('board')
 		if platform != pre_platform or board != pre_board:
-			stino.const.settings.set('platform', platform)
-			stino.const.settings.set('board', board)
-			stino.const.settings.set('full_compilation', True)
-			stino.cur_menu.update()
-			stino.status_info.update()
+			const.settings.set('platform', platform)
+			const.settings.set('board', board)
+			const.settings.set('full_compilation', True)
+			globalvars.menu.update()
+			# status_info.update()
 
 	def is_checked(self, menu_str):
 		state = False
-		platform = stino.const.settings.get('platform')
-		board = stino.const.settings.get('board')
-		board_platform = stino.utils.genKey(board, platform)
+		platform = const.settings.get('platform')
+		board = const.settings.get('board')
+		board_platform = textutil.genKey(platform, board)
 		if menu_str == board_platform:
 			state = True
 		return state
 
 class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		(item, board_type, board, platform) = stino.utils.getInfoFromKey(menu_str)
-		type_caption = stino.arduino_info.getPlatformTypeCaption(platform, board_type)
-		pre_item = stino.const.settings.get(type_caption)
+		(item, board_type, board, platform) = textutil.getInfoFromKey(menu_str)
+		type_caption = globalvars.arduino_info.getPlatformTypeCaption(platform, board_type)
+		pre_item = const.settings.get(type_caption)
 		if not item == pre_item:
-			stino.const.settings.set(type_caption, item)
-			stino.const.settings.set('full_compilation', True)
-			stino.cur_menu.commandUpdate()
-			stino.status_info.update()
+			const.settings.set(type_caption, item)
+			const.settings.set('full_compilation', True)
+			globalvars.menu.update()
+			# status_info.update()
 
 	def is_checked(self, menu_str):
 		state = False
-		(item, board_type, board, platform) = stino.utils.getInfoFromKey(menu_str)
-		type_caption = stino.arduino_info.getPlatformTypeCaption(platform, board_type)
-		pre_item = stino.const.settings.get(type_caption)
+		(item, board_type, board, platform) = textutil.getInfoFromKey(menu_str)
+		type_caption = globalvars.arduino_info.getPlatformTypeCaption(platform, board_type)
+		pre_item = const.settings.get(type_caption)
 		if item == pre_item:
 			state = True
 		return state
@@ -365,14 +383,14 @@ class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 class SelectSerialPortCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		serial_port = menu_str
-		pre_serial_port = stino.const.settings.get('serial_port')
+		pre_serial_port = const.settings.get('serial_port')
 		if serial_port != pre_serial_port:
-			stino.const.settings.set('serial_port', serial_port)
-			stino.status_info.update()
+			const.settings.set('serial_port', serial_port)
+			# status_info.update()
 
 	def is_checked(self, menu_str):
 		state = False
-		serial_port = stino.const.settings.get('serial_port')
+		serial_port = const.settings.get('serial_port')
 		if menu_str == serial_port:
 			state = True
 		return state
@@ -380,101 +398,101 @@ class SelectSerialPortCommand(sublime_plugin.WindowCommand):
 class SelectBaudrateCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
 		baudrate = menu_str
-		pre_baudrate = stino.const.settings.get('baudrate')
+		pre_baudrate = const.settings.get('baudrate')
 		if baudrate != pre_baudrate:
-			stino.const.settings.set('baudrate', baudrate)
-			stino.status_info.update()
+			const.settings.set('baudrate', baudrate)
+			# status_info.update()
 
 	def is_checked(self, menu_str):
 		state = False
-		baudrate = stino.const.settings.get('baudrate')
+		baudrate = const.settings.get('baudrate')
 		if menu_str == baudrate:
 			state = True
 		return state
 
 class StartSerialMonitorCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		serial_port = stino.const.settings.get('serial_port')
-		if not serial_port in stino.serial_port_in_use_list:
-			serial_monitor = stino.smonitor.SerialMonitor(serial_port)
-			stino.serial_port_in_use_list.append(serial_port)
-			stino.serial_port_monitor_dict[serial_port] = serial_monitor
+		serial_port = const.settings.get('serial_port')
+		if not serial_port in serial_port_in_use_list:
+			serial_monitor = smonitor.SerialMonitor(serial_port)
+			serial_port_in_use_list.append(serial_port)
+			serial_port_monitor_dict[serial_port] = serial_monitor
 		else:
-			serial_monitor = stino.serial_port_monitor_dict[serial_port]
+			serial_monitor = serial_port_monitor_dict[serial_port]
 		serial_monitor.start()
 		self.window.run_command('send_to_serial')
 
 	def is_enabled(self):
 		state = False
-		serial_port = stino.const.settings.get('serial_port')
-		serial_port_list = stino.smonitor.genSerialPortList()
-		if serial_port in serial_port_list:
-			# if stino.smonitor.isSerialPortAvailable(serial_port):
-			state = True
+		# serial_port = const.settings.get('serial_port')
+		# serial_port_list = smonitor.genSerialPortList()
+		# if serial_port in serial_port_list:
+		# 	# if smonitor.isSerialPortAvailable(serial_port):
+		# 	state = True
 		return state
 
 class StopSerialMonitorCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		name = self.window.active_view().name()
 		serial_port = name.split('-')[1].strip()
-		serial_monitor = stino.serial_port_monitor_dict[serial_port]
+		serial_monitor = serial_port_monitor_dict[serial_port]
 		serial_monitor.stop()
-		if serial_port in stino.serial_port_in_use_list:
-			stino.serial_port_in_use_list.remove(serial_port)
+		if serial_port in serial_port_in_use_list:
+			serial_port_in_use_list.remove(serial_port)
 
 	def is_enabled(self):
 		state = False
-		view = self.window.active_view()
-		if stino.smonitor.isMonitorView(view):
-			name = view.name()
-			serial_port = name.split('-')[1].strip()
-			serial_port_list = stino.serial_port_in_use_list
-			if serial_port in serial_port_list:
-				state = True
+		# view = self.window.active_view()
+		# if smonitor.isMonitorView(view):
+		# 	name = view.name()
+		# 	serial_port = name.split('-')[1].strip()
+		# 	serial_port_list = serial_port_in_use_list
+		# 	if serial_port in serial_port_list:
+		# 		state = True
 		return state
 
 class SendToSerialCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		caption = '%(Send)s'
-		self.caption = caption % stino.cur_language.getTransDict()
+		self.caption = caption % cur_language.getTransDict()
 		self.window.show_input_panel(self.caption, '', self.on_done, None, None)
 		
 	def on_done(self, input_text):
 		if input_text:
 			view = self.window.active_view()
-			if stino.smonitor.isMonitorView(view):
+			if smonitor.isMonitorView(view):
 				name = view.name()
 				serial_port = name.split('-')[1].strip()
-				if serial_port in stino.serial_port_in_use_list:
-					serial_monitor = stino.serial_port_monitor_dict[serial_port]
+				if serial_port in serial_port_in_use_list:
+					serial_monitor = serial_port_monitor_dict[serial_port]
 					serial_monitor.send(input_text)
 					self.window.show_input_panel(self.caption, '', self.on_done, None, None)
 
 	def is_enabled(self):
 		state = False
-		view = self.window.active_view()
-		if stino.smonitor.isMonitorView(view):
-			name = view.name()
-			serial_port = name.split('-')[1].strip()
-			serial_port_list = stino.serial_port_in_use_list
-			if serial_port in serial_port_list:
-				state = True
+		# view = self.window.active_view()
+		# if smonitor.isMonitorView(view):
+		# 	name = view.name()
+		# 	serial_port = name.split('-')[1].strip()
+		# 	serial_port_list = serial_port_in_use_list
+		# 	if serial_port in serial_port_list:
+		# 		state = True
 		return state
 
 class SelectProgrammerCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		(programmer, platform) = stino.utils.getInfoFromKey(menu_str)
-		pre_platform = stino.const.settings.get('platform')
-		pre_programmer = stino.const.settings.get('programmer')
+		(programmer, platform) = textutil.getInfoFromKey(menu_str)
+		pre_platform = const.settings.get('platform')
+		pre_programmer = const.settings.get('programmer')
 		if platform != pre_platform or programmer != pre_programmer:
-			stino.const.settings.set('programmer', programmer)
-			stino.status_info.update()
+			const.settings.set('programmer', programmer)
+			# status_info.update()
 
 	def is_checked(self, menu_str):
 		state = False
-		platform = stino.const.settings.get('platform')
-		programmer = stino.const.settings.get('programmer')
-		programmer_platform = stino.utils.genKey(programmer, platform)
+		platform = const.settings.get('platform')
+		programmer = const.settings.get('programmer')
+		programmer_platform = textutil.genKey(platform, programmer)
 		if menu_str == programmer_platform:
 			state = True
 		return state
@@ -483,127 +501,119 @@ class BurnBootloaderCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		cur_burn = stino.compilation.BurnBootloader(stino.cur_language, stino.arduino_info, stino.cur_menu, filename)
-		cur_burn.start()
+		# cur_burn = compilation.BurnBootloader(cur_language, arduino_info, cur_menu, filename)
+		# cur_burn.start()
 
 	def is_enabled(self):
 		state = False
-		platform = stino.const.settings.get('platform')
-		programmer_lists = stino.arduino_info.getProgrammerLists(platform)
-		if programmer_lists:
-			state = True
-		show_state = stino.const.settings.get('show_arduino_menu', False)
-		state = state and show_state
+		platform = const.settings.get('platform')
+		# programmer_lists = arduino_info.getProgrammerLists(platform)
+		# if programmer_lists:
+		# 	state = True
+		# show_state = const.settings.get('show_arduino_menu', False)
+		# state = state and show_state
 		return state
 
 class SelectLanguageCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		language = stino.cur_language.getLanguageFromLanguageText(menu_str)
-		pre_language = stino.const.settings.get('language')
+		language = globalvars.cur_language.getLanguageFromLanguageText(menu_str)
+		pre_language = const.settings.get('language')
 		if language != pre_language:
-			stino.const.settings.set('language', language)
-			stino.cur_language.update()
-			stino.cur_menu.languageUpdate()
+			const.settings.set('language', language)
+			globalvars.cur_language.update()
+			globalvars.menu.changeLanguage()
 
 	def is_checked(self, menu_str):
 		state = False
-		setting_language = stino.const.settings.get('language')
-		cur_language = stino.cur_language.getLanguageFromLanguageText(menu_str)
+		setting_language = const.settings.get('language')
+		cur_language = globalvars.cur_language.getLanguageFromLanguageText(menu_str)
 		if cur_language == setting_language:
 			state = True
 		return state
 
 class ToggleGlobalSettingCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		global_setting = not stino.const.settings.get('global_setting')
-		stino.const.settings.set('global_setting', global_setting)
-		if not global_setting:
-			file_path = self.window.active_view().file_name()
-			setting_folder_path = os.path.split(file_path)[0]
-			stino.const.settings.changeSettingFileFolder(setting_folder_path)
-		stino.const.settings.changeState(global_setting)
-		stino.arduino_info.update()
-		stino.cur_menu.fullUpdate()
-		stino.status_info.update()
+		global_setting = not const.settings.get('global_setting', True)
+		file_path = self.window.active_view().file_name()
+		setting_folder_path = os.path.split(file_path)[0]
+		const.settings.changeState(global_setting, setting_folder_path)
+		globalvars.arduino_info.update()
+		globalvars.menu.update()
+		# status_info.update()
 		
 	def is_checked(self):
-		state = stino.const.settings.get('global_setting')
+		state = const.settings.get('global_setting', True)
 		return state
 
 	def is_enabled(self):
-		state = stino.const.settings.get('show_arduino_menu', False)
+		state = const.settings.get('show_arduino_menu', False)
 		return state
 
 class SelectArduinoFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		app_root_list = stino.osfile.getAppRootList()
+		app_root_list = fileutil.getAppRootList()
 		self.window.run_command('show_file_explorer_panel', {'top_path_list':app_root_list, \
-			'condition_mod':'arduino', 'condition_func':'isArduinoRoot', 'function_mod':'actions', \
+			'condition_mod':'fileutil', 'condition_func':'isArduinoRoot', 'function_mod':'actions', \
 			'function_func':'changeArduinoRoot', 'with_files': False})
 
 class ChangeSketchbookFolderCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		home_root_list = stino.osfile.getHomeRootList()
+		home_root_list = fileutil.getHomeRootList()
 		self.window.run_command('show_file_explorer_panel', {'top_path_list':home_root_list, \
-			'condition_mod':'osfile', 'condition_func':'isButtonPress', 'function_mod':'actions', \
+			'condition_mod':'fileutil', 'condition_func':'isButtonPress', 'function_mod':'actions', \
 			'function_func':'changeSketchbookRoot', 'with_files': False, 'with_button': True})
 
 class ToggleFullCompilationCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		full_compilation = not stino.const.settings.get('full_compilation')
-		stino.const.settings.set('full_compilation', full_compilation)
-		stino.cur_menu.commandUpdate()
+		full_compilation = not const.settings.get('full_compilation', False)
+		const.settings.set('full_compilation', full_compilation)
 
 	def is_checked(self):
-		state = stino.const.settings.get('full_compilation')
+		state = const.settings.get('full_compilation', False)
 		return state
 
 class ToggleVerboseCompilationCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		verbose_compilation = not stino.const.settings.get('verbose_compilation')
-		stino.const.settings.set('verbose_compilation', verbose_compilation)
-		stino.cur_menu.commandUpdate()
+		verbose_compilation = not const.settings.get('verbose_compilation', False)
+		const.settings.set('verbose_compilation', verbose_compilation)
 
 	def is_checked(self):
-		state = stino.const.settings.get('verbose_compilation')
+		state = const.settings.get('verbose_compilation', False)
 		return state
 
 class ToggleVerboseUploadCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		verbose_upload = not stino.const.settings.get('verbose_upload')
-		stino.const.settings.set('verbose_upload', verbose_upload)
-		stino.cur_menu.commandUpdate()
+		verbose_upload = not const.settings.get('verbose_upload', False)
+		const.settings.set('verbose_upload', verbose_upload)
 
 	def is_checked(self):
-		state = stino.const.settings.get('verbose_upload')
+		state = const.settings.get('verbose_upload', False)
 		return state
 
 class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 	def run(self):
-		verify_code = not stino.const.settings.get('verify_code')
-		stino.const.settings.set('verify_code', verify_code)
-		stino.cur_menu.commandUpdate()
+		verify_code = not const.settings.get('verify_code', False)
+		const.settings.set('verify_code', verify_code)
 
 	def is_checked(self):
-		state = stino.const.settings.get('verify_code')
+		state = const.settings.get('verify_code', False)
 		return state
 
 class AutoFormatCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.run_command('reindent', {'single_line': False})
 		display_text = 'Auto Format finished.\n'
-		msg = stino.cur_language.translate(display_text)
-		state = stino.log_panel.addText(msg)
+		state = globalvars.log_panel.addText(display_text)
 
 class ArchiveSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		filename = self.window.active_view().file_name()
 		if filename:
-			sketch_folder_path = stino.src.getSketchFolderPath(filename)
-			home_root_list = stino.osfile.getHomeRootList()
+			sketch_folder_path = os.path.split(filename)[0]
+			home_root_list = fileutil.getHomeRootList()
 			self.window.run_command('show_file_explorer_panel', {'top_path_list':home_root_list, \
-				'condition_mod':'osfile', 'condition_func':'isButtonPress', 'function_mod':'actions', \
-				'function_func':'getArchiveFolderPath', 'with_files': False, 'with_button': True, \
+				'condition_mod':'fileutil', 'condition_func':'isButtonPress', 'function_mod':'actions', \
+				'function_func':'archiveSketch', 'with_files': False, 'with_button': True, \
 				'extra_parameter': sketch_folder_path})
 
 class FixEncodingCommand(sublime_plugin.WindowCommand):
@@ -614,38 +624,39 @@ class FixEncodingCommand(sublime_plugin.WindowCommand):
 			state = True
 			if view.is_dirty():
 				display_text = 'Discard all changes and reload sketch?\n'
-				msg = stino.cur_language.translate(display_text)
+				msg = globalvars.cur_language.translate(display_text)
 				state = sublime.ok_cancel_dialog(msg)
 		
 			if state:
-				content = stino.osfile.readFileText(filename)
-				edit = view.begin_edit()
-				view.replace(edit, sublime.Region(0, view.size()), content)
-				view.end_edit(edit)
+				file_text = fileutil.readFileText(filename)
+				textutil.replaceTextOfView(view, file_text)
 
 class OpenRefCommand(sublime_plugin.WindowCommand):
 	def run(self, menu_str):
-		stino.osfile.openUrl(menu_str)
+		fileutil.openUrl(menu_str)
 
 class FindInReferenceCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		view = self.window.active_view()
-		selected_text = stino.utils.getSelectedTextFromView(view)
-		platform = stino.const.settings.get('platform')
-		keyword_operator_list = stino.arduino_info.getOperatorList(platform)
-		keyword_list = stino.utils.getKeywordListFromText(selected_text, keyword_operator_list)
-		(ref_list, msg_text) = stino.utils.getRefList(keyword_list, stino.arduino_info, platform)
-		if ref_list:
-			stino.osfile.openUrlList(ref_list)
-		if msg_text:
-			stino.log_panel.addText(msg_text)
-		if not (ref_list or msg_text):
+		selected_text = textutil.getSelectedTextFromView(view)
+
+		platform = const.settings.get('platform')
+		common_keyword_operator_list = globalvars.arduino_info.getOperatorList('common')
+		platform_keyword_operator_list = globalvars.arduino_info.getOperatorList(platform)
+		keyword_operator_list = common_keyword_operator_list + platform_keyword_operator_list
+
+		keyword_list = textutil.getKeywordListFromText(selected_text, keyword_operator_list)
+		(url_list, ref_text) = textutil.getRefList(keyword_list, globalvars.arduino_info, platform)
+		if url_list:
+			fileutil.openUrlList(url_list)
+		if ref_text:
+			globalvars.log_panel.addText(ref_text)
+		if not (url_list or ref_text):
 			display_text = 'No reference available.\n'
-			msg = stino.cur_language.translate(display_text)
-			state = stino.log_panel.addText(msg)
+			globalvars.log_panel.addText(display_text)
 
 class AboutStinoCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		display_text = 'Stino'
-		msg = stino.cur_language.translate(display_text)
+		msg = globalvars.cur_language.translate(display_text)
 		sublime.message_dialog(msg)

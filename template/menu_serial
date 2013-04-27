@@ -1,5 +1,5 @@
 	{
-		"caption": "%(Serial_Monitor)s",
+		"caption": "%(Serial Monitor)s",
 		"id": "serial_monitor",
 		"children":
 		[

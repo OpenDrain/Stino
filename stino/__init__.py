@@ -1,25 +1,15 @@
 #-*- coding: utf-8 -*-
 # stino/__init__.py
 
-import sublime
+# Part of the Stino project - https://github.com/Robot-Will/Stino
+# Stino is Sublime Text plugin, which provides a Arduino-like IDE.
+# Copyright (c) 2012-13 Robot Will
 
-import utils
-import stpanel
-import setting
-import const
-import osfile
-import language
-import smonitor
-import arduino
-import stmenu
-import actions
-import compilation
+# This program is free software; you can redistribute it and/or modify
+# it.
 
-log_panel = stpanel.STPanel()
-serial_listener = smonitor.SerialPortListener()
-cur_language = language.Language()
-arduino_info = arduino.Arduino()
-cur_menu = stmenu.STMenu(cur_language, arduino_info)
-status_info = setting.Status(const.settings, arduino_info, cur_language)
-serial_port_in_use_list = []
-serial_port_monitor_dict = {}
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+
+from . import const

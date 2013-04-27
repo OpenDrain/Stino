@@ -1,123 +1,110 @@
 #-*- coding: utf-8 -*-
-# stino/setting.py
+# stino/const.py
 
-import sublime
 import os
 import json
 
+global_setting_key_list = ['stino_root', 'global_setting', 'show_arduino_menu',\
+	 'show_serial_monitor_menu', 'language', 'setting_folder_path']
+
 class Setting:
-	def __init__(self):
-		user_path = os.path.join(sublime.packages_path(), 'User')
-		self.global_settings_file = 'Stino.sublime-settings'
-		self.global_settings_file_path = os.path.join(user_path, self.global_settings_file)
-		self.global_settings = sublime.load_settings(self.global_settings_file)
-		
-		global_setting_option = self.global_settings.get('global_setting')
-		if global_setting_option is None:
-			global_setting_option = True
-			self.global_settings.set('global_setting', global_setting_option)
-			sublime.save_settings(self.global_settings_file)
-		
-		self.use_global_setting = global_setting_option
+	def __init__(self, stino_root):
 		self.setting_filename = 'Stino.settings'
-		self.setting_file_path = self.global_settings_file_path
+		self.global_settings_dict = {}
+		self.settings_dict = {}
+
+		self.stino_root = stino_root
+		self.global_setting_file_path = os.path.join(self.stino_root, self.setting_filename)
+		
+		# Fisrt, read the global settings.
+		self.use_global_setting = True
 		self.readSettingFile()
 
-	def get(self, key, default_value = None):
-		if self.use_global_setting or (key == 'global_setting') or (key == 'show_arduino_menu') \
-			or (key == 'show_serial_monitor_menu') or (key == 'language') or (key == 'pre_setting_folder_path'):
-			value = self.global_settings.get(key, default_value)
+		# If 'global_setting' is not set, use global settings.
+		self.use_global_setting = self.get('global_setting')
+		if self.use_global_setting is None:
+			self.use_global_setting = True
+			self.set('global_setting', self.use_global_setting)
+
+		# Set working settings_file path.
+		self.setting_folder_path = self.get('setting_folder_path', '')
+		if not os.path.isdir(self.setting_folder_path):
+			self.setting_file_path = self.global_setting_file_path
 		else:
-			if key in self.settings_dict:
-				value = self.settings_dict[key]
-			else:
-				value = default_value
+			self.setting_file_path = os.path.join(self.setting_folder_path, self.setting_filename)
+		
+		# Finally, read settings.
+		self.readSettingFile()
+
+	def isGlobalKey(self, key):
+		state = True
+		if not self.use_global_setting:
+			if not key in global_setting_key_list:
+				state = False
+		return state
+
+	def get(self, key, default_value = None):
+		settings_dict = self.global_settings_dict
+		if not self.isGlobalKey(key):
+			settings_dict = self.settings_dict
+
+		if key in settings_dict:
+			value = settings_dict[key]
+		else:
+			value = default_value
 		return value
 
 	def set(self, key, value):
-		self.global_settings.set(key, value)
-		sublime.save_settings(self.global_settings_file)
-		if not self.use_global_setting:
+		if self.isGlobalKey(key):
+			self.global_settings_dict[key] = value
+		else:
 			self.settings_dict[key] = value
-			self.saveSettingFile()
+		self.saveSettingFile()
 
 	def readSettingFile(self):
-		opened_file = open(self.setting_file_path, 'r')
-		settings_text = opened_file.read()
-		opened_file.close()
+		if self.use_global_setting:
+			setting_file_path = self.global_setting_file_path
+		else:
+			setting_file_path = self.setting_file_path
 
-		settings_text = settings_text.decode('utf-8')
-		self.settings_dict = json.loads(settings_text)
+		if os.path.isfile(setting_file_path):
+			opened_file = open(setting_file_path, 'r')
+			settings_text = opened_file.read()
+			opened_file.close()
+
+			settings_dict = json.loads(settings_text)
+
+			if self.use_global_setting:
+				self.global_settings_dict = settings_dict
+			else:
+				self.settings_dict = settings_dict
+		else:
+			self.saveSettingFile()
 
 	def saveSettingFile(self):
-		settings_text = json.dumps(self.settings_dict, sort_keys = True, indent = 4)
+		if self.use_global_setting:
+			settings_dict = self.global_settings_dict
+			setting_file_path = self.global_setting_file_path
+		else:
+			settings_dict = self.settings_dict
+			setting_file_path = self.setting_file_path
 
-		opened_file = open(self.setting_file_path, 'w')
+		settings_text = json.dumps(settings_dict, sort_keys = True, indent = 4)
+		opened_file = open(setting_file_path, 'w')
 		opened_file.write(settings_text)
 		opened_file.close()
 
-	def changeSettingFileFolder(self, setting_file_folder_path):
-		self.setting_file_path = os.path.join(setting_file_folder_path, self.setting_filename)
-		if not os.path.isfile(self.setting_file_path):
-			self.saveSettingFile()
-		self.readSettingFile()
+	def changeSettingFileFolder(self, setting_folder_path):
+		if os.path.isdir(setting_folder_path):
+			self.set('setting_folder_path', setting_folder_path)
+			self.setting_file_path = os.path.join(setting_folder_path, self.setting_filename)
+			if not os.path.isfile(self.setting_file_path):
+				self.saveSettingFile()
+			self.readSettingFile()
 
-	def changeState(self, state):
+	def changeState(self, state, setting_folder_path):
 		self.use_global_setting = state
-
-class Status:
-	def __init__(self, settings, arduino_info, language):
-		self.settings = settings
-		self.arduino_info = arduino_info
-		self.language = language
-
-		self.view = None
-		self.global_setting = True
-		self.arduino_version_text = ''
-		self.board = ''
-		self.board_option_list = []
-		self.programmer = ''
-		self.serial_port = ''
-		self.baudrate = ''
-
-		self.loadInfo()
-
-	def update(self):
-		text = ''
-		show_arduino_menu = self.settings.get('show_arduino_menu')
-		if show_arduino_menu and self.arduino_info.isReady():
-			self.loadInfo()
-			if self.global_setting:
-				text += '%(Global_Setting)s - '
-			text += 'Arduino %s' % self.arduino_version_text
-			text += ', %s' % self.board
-			for board_option in self.board_option_list:
-				text += ', %s' % board_option
-			if self.serial_port:
-				text += ', %s' % self.serial_port
-				text += ', %s bps' % self.baudrate
-			if self.programmer:
-				text += ', %s' % self.programmer
-			text = text % self.language.getTransDict()
-		if self.view:
-			self.view.set_status('Stino_status', text)
-
-	def loadInfo(self):
-		if self.arduino_info.isReady():
-			self.global_setting = self.settings.get('global_setting')
-			self.arduino_version_text = self.arduino_info.getVersionText()
-			self.board = self.settings.get('board')
-			self.programmer = self.settings.get('programmer')
-			self.serial_port = self.settings.get('serial_port')
-			self.baudrate = self.settings.get('baudrate')
-
-			platform = self.settings.get('platform')
-			board_type_list = self.arduino_info.getBoardTypeList(platform, self.board)
-			for board_type in board_type_list:
-				type_caption = self.arduino_info.getPlatformTypeCaption(platform, board_type)
-				type_value = self.settings.get(type_caption)
-				self.board_option_list.append(type_value)
-
-	def setView(self, view):
-		self.view = view
+		self.set('global_setting', self.use_global_setting)
+		if not self.use_global_setting:
+			self.changeSettingFileFolder(setting_folder_path)
 
