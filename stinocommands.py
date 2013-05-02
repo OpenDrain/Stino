@@ -21,6 +21,7 @@ from stino import stpanel
 from stino import sketch
 from stino import src
 from stino import actions
+from stino import compilation
 
 class StinoInsertTextCommand(sublime_plugin.TextCommand):
 	def run(self, edit, position, text = ''):
@@ -137,6 +138,9 @@ class SketchListener(sublime_plugin.EventListener):
 						const.settings.changeSettingFileFolder(setting_folder_path)
 						globalvars.arduino_info.update()
 						globalvars.menu.update()
+						globalvars.command.update()
+						globalvars.syntax.update()
+						globalvars.completion.update()
 
 			if state != pre_state:
 				const.settings.set('show_arduino_menu', state)
@@ -293,9 +297,9 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
-		# cur_compilation = compilation.Compilation(cur_language, arduino_info, \
-		# 	cur_menu, filename)
-		# cur_compilation.start()
+		cur_compilation = compilation.Compilation(globalvars.cur_language, globalvars.arduino_info, \
+			globalvars.menu, filename)
+		cur_compilation.start()
 
 	def is_enabled(self):
 		state = const.settings.get('show_arduino_menu', False)
@@ -349,6 +353,9 @@ class SelectBoardCommand(sublime_plugin.WindowCommand):
 			const.settings.set('board', board)
 			const.settings.set('full_compilation', True)
 			globalvars.menu.update()
+			globalvars.command.update()
+			globalvars.syntax.update()
+			globalvars.completion.update()
 			# status_info.update()
 
 	def is_checked(self, menu_str):
@@ -368,7 +375,7 @@ class SelectBoardTypeCommand(sublime_plugin.WindowCommand):
 		if not item == pre_item:
 			const.settings.set(type_caption, item)
 			const.settings.set('full_compilation', True)
-			globalvars.menu.update()
+			globalvars.command.update()
 			# status_info.update()
 
 	def is_checked(self, menu_str):
@@ -522,6 +529,7 @@ class SelectLanguageCommand(sublime_plugin.WindowCommand):
 			const.settings.set('language', language)
 			globalvars.cur_language.update()
 			globalvars.menu.changeLanguage()
+			globalvars.command.changeLanguage()
 
 	def is_checked(self, menu_str):
 		state = False
@@ -539,6 +547,9 @@ class ToggleGlobalSettingCommand(sublime_plugin.WindowCommand):
 		const.settings.changeState(global_setting, setting_folder_path)
 		globalvars.arduino_info.update()
 		globalvars.menu.update()
+		globalvars.command.update()
+		globalvars.syntax.update()
+		globalvars.completion.update()
 		# status_info.update()
 		
 	def is_checked(self):
@@ -567,6 +578,7 @@ class ToggleFullCompilationCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		full_compilation = not const.settings.get('full_compilation', False)
 		const.settings.set('full_compilation', full_compilation)
+		globalvars.command.update()
 
 	def is_checked(self):
 		state = const.settings.get('full_compilation', False)
@@ -576,6 +588,7 @@ class ToggleVerboseCompilationCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		verbose_compilation = not const.settings.get('verbose_compilation', False)
 		const.settings.set('verbose_compilation', verbose_compilation)
+		globalvars.command.update()
 
 	def is_checked(self):
 		state = const.settings.get('verbose_compilation', False)
@@ -585,6 +598,7 @@ class ToggleVerboseUploadCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		verbose_upload = not const.settings.get('verbose_upload', False)
 		const.settings.set('verbose_upload', verbose_upload)
+		globalvars.command.update()
 
 	def is_checked(self):
 		state = const.settings.get('verbose_upload', False)
@@ -594,6 +608,7 @@ class ToggleVerifyCodeCommand(sublime_plugin.WindowCommand):
 	def run(self):
 		verify_code = not const.settings.get('verify_code', False)
 		const.settings.set('verify_code', verify_code)
+		globalvars.command.update()
 
 	def is_checked(self):
 		state = const.settings.get('verify_code', False)

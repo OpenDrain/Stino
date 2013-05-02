@@ -78,7 +78,8 @@ class Language:
 	def genDefaultTransDict(self):
 		self.trans_dict = {}
 
-		pattern_text_list = [r"%\((.+?)\)s", r"display_text\s*?=\s*?'((?:[^'\\']|\\.)+?)'"]
+		# pattern_text_list = [r"%\((.+?)\)s", r"display_text\s*?=\s*?'((?:[^'\\']|\\.)+?)'"]
+		pattern_text_list = [r"%\((.+?)\)s"]
 		pattern_list = []
 		for pattern_text in pattern_text_list:
 			pattern_list.append(re.compile(pattern_text, re.S))

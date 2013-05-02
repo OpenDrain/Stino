@@ -308,3 +308,26 @@ def openUrl(url):
 def openUrlList(url_list):
 	for url in url_list:
 		openUrl(url)
+
+def copyFile(src_file_path, des_dir_path):
+	src_filename = os.path.split(src_file_path)[1]
+	des_file_path = os.path.join(des_dir_path, src_filename)
+	text = readFileText(src_file_path)
+	writeFile(des_file_path, text)
+
+def getInfoBlock(file_path, info_value):
+	info_block = []
+	lines = readFileLines(file_path)
+	info_block_list = textutil.splitToBlocks(lines, sep = '.name', none_sep = 'menu.')
+	for cur_info_block in info_block_list:
+		line = cur_info_block[0]
+		(key, value) = textutil.getKeyValue(line)
+		for line in cur_info_block[1:]:
+			if '.container' in line:
+				(key, value) = textutil.getKeyValue(line)
+				break
+		
+		if value == info_value:
+			info_block = cur_info_block
+			break
+	return info_block

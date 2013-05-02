@@ -57,11 +57,13 @@ script_root = os.path.join(stino_root, 'stino')
 template_root = os.path.join(stino_root, 'template')
 language_root = os.path.join(stino_root, 'language')
 config_root = os.path.join(stino_root, 'config')
+compilation_root = os.path.join(stino_root, 'compilation')
 
 #
 arduino_ext_list = ['.ino', '.pde']
 cpp_ext_list = ['.c', '.cc', '.cpp', '.cxx']
-src_ext_list= arduino_ext_list + cpp_ext_list
+s_ext_list = ['.s']
+src_ext_list= arduino_ext_list + cpp_ext_list + s_ext_list
 src_header_ext_list = ['.h', '.hpp']
 all_src_ext_list = src_ext_list + src_header_ext_list
 

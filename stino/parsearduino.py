@@ -578,3 +578,116 @@ def genVersionInfo():
 	(version, version_text) = convertTextToVersion(version_text)
 	version_info = (version, version_text)
 	return  version_info
+
+def getCommonInfoBlock(board_info_block):
+	board_common_info_block = []
+	for line in board_info_block:
+		if 'menu.' in line:
+			break
+		board_common_info_block.append(line)
+	return board_common_info_block
+
+def getBoardTypeInfoBlock(board_info_block, board_type):
+	board_type_info_block = []
+	for line in board_info_block:
+		if board_type in line:
+			board_type_info_block.append(line)
+	return board_type_info_block
+
+def genTypeInfoBlockList(info_block):
+	block_list = textutil.splitToBlocks(info_block, sep = '.name', key_length = 4)
+	name_key_list = []
+	for block in block_list:
+		name_line = block[0]
+		(key, value) = textutil.getKeyValue(name_line)
+		key = key.replace('.name', '.')
+		name_key_list.append(key)
+
+	type_info_block_list = []
+	for name_key in name_key_list:
+		type_info_block = []
+		for line in info_block:
+			if name_key in line:
+				type_info_block.append(line)
+		type_info_block_list.append(type_info_block)
+	return type_info_block_list
+
+def removeInfo(type_info_block, board_type_value):
+	block = []
+	block_list = genTypeInfoBlockList(type_info_block)
+	for cur_block in block_list:
+		line = cur_block[0]
+		(key, value) = textutil.getKeyValue(line)
+		if value == board_type_value:
+			block = cur_block
+	return block
+
+def splitInfoBlock(info_block, board_type_value_dict):
+	info_blocks = []
+	common_info_block = getCommonInfoBlock(info_block)
+	info_blocks.append(common_info_block)
+
+	for board_type in board_type_value_dict:
+		board_type_value = board_type_value_dict[board_type]
+		type_info_block = getBoardTypeInfoBlock(info_block, board_type)
+		type_info_block = removeInfo(type_info_block, board_type_value)
+		info_blocks.append(type_info_block)
+	return info_blocks
+
+def genBoardInfoDict(arduino_info):
+	info_key_list = []
+	info_dict = {}
+	platform = const.settings.get('platform')
+	board = const.settings.get('board')
+	board_file_path = arduino_info.getBoardFile(platform, board)
+	if os.path.isfile(board_file_path):
+		info_block = fileutil.getInfoBlock(board_file_path, board)
+
+		board_type_list = arduino_info.getBoardTypeList(platform, board)
+		board_type_value_dict = {}
+		for board_type in board_type_list:
+			board_type_caption = arduino_info.getPlatformTypeCaption(platform, board_type)
+			board_type_value_dict[board_type] = const.settings.get(board_type_caption)
+
+		info_blocks = splitInfoBlock(info_block, board_type_value_dict)
+		
+		for info_block in info_blocks:
+			(cur_info_key_list, cur_info_dict) = textutil.genInfoDictFromBlock(info_block)
+			info_key_list += cur_info_key_list
+			info_dict.update(cur_info_dict)
+	return (info_key_list, info_dict)
+
+def genProgrammerInfoDict(arduino_info):
+	info_key_list = []
+	info_dict = {}
+	platform = const.settings.get('platform')
+	programmer = const.settings.get('programmer')
+	programmer_file_path = arduino_info.getProgrammerFile(platform, programmer)
+	if os.path.isfile(programmer_file_path):
+		info_block = fileutil.getInfoBlock(programmer_file_path, programmer)
+		(info_key_list, info_dict) = textutil.genInfoDictFromBlock(info_block)
+	return (info_key_list, info_dict)
+
+def regulariseToolsKey(key):
+	info_list = key.split('.')
+	new_key = ''
+	for info in info_list[2:]:
+		new_key += info
+		new_key += '.'
+	new_key = new_key[:-1]
+	new_key = new_key.replace('params.', '')
+	return new_key
+
+def genPlatformInfoDict(platform_file_path):
+	platform_info_key_list = []
+	platform_info_dict = {}
+	lines = fileutil.readFileLines(platform_file_path)
+	for line in lines:
+		line = line.strip()
+		if line and (not '#' in line):
+			(key, value) = textutil.getKeyValue(line)
+			if 'tools.' in key:
+				key = regulariseToolsKey(key)
+			platform_info_key_list.append(key)
+			platform_info_dict[key] = value
+	return (platform_info_key_list, platform_info_dict)

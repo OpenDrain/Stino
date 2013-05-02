@@ -142,6 +142,17 @@ def genSelectLanguageCommandText(language):
 		command_text = genSelectCommandText(command_caption, command, parent_mod, list_func)
 	return command_text
 
+def genToggleCommandText(caption, setting_text):
+	state = const.settings.get(setting_text)
+	if state:
+		state_text = '%(OFF)s'
+	else:
+		state_text = '%(ON)s'
+	command = 'toggle_' + setting_text
+	command_caption = '%(Toggle)s ' + caption
+	command_text = '	{ "caption": "Stino: %s %s", "command": "%s" },\n' % (command_caption, state_text, command)
+	return command_text
+
 def genCommandText(arduino_info, language):
 	text = ''
 	text += genOpenSketchCommandText(arduino_info)
@@ -153,6 +164,10 @@ def genCommandText(arduino_info, language):
 	text += genSelectBaudrateCommandText()
 	text += genSelectProgrammerCommandText(arduino_info)
 	text += genSelectLanguageCommandText(language)
+	text += genToggleCommandText('%(Full_Compilation)s', 'full_compilation')
+	text += genToggleCommandText('%(Show_Verbose_Output)s-%(Compilation)s', 'verbose_compilation')
+	text += genToggleCommandText('%(Show_Verbose_Output)s-%(Upload)s', 'verbose_upload')
+	text += genToggleCommandText('%(Verify_code_after_upload)s', 'verify_code')
 
 	temp_file = os.path.join(const.template_root, 'commands')
 	command_text = fileutil.readFileText(temp_file)
@@ -171,5 +186,8 @@ class STCommand:
 		self.update()
 
 	def update(self):
-		file_text = genCommandText(self.arduino_info, self.language)
-		writeCompletionFile(self.file_path, file_text, self.language)
+		self.file_text = genCommandText(self.arduino_info, self.language)
+		writeCompletionFile(self.file_path, self.file_text, self.language)
+
+	def changeLanguage(self):
+		writeCompletionFile(self.file_path, self.file_text, self.language)

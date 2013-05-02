@@ -99,3 +99,27 @@ def isArduinoSrcFile(file_path):
 	if file_ext.lower() in const.all_src_ext_list:
 		state = True
 	return state
+
+def findSrcFile(folder_path, ext_list):
+	file_path_list = []
+	folder_path = textutil.convertTextToUtf8(folder_path)
+	for (cur_path, sub_dirs, files) in os.walk(folder_path):
+		if 'examples' in cur_path.lower():
+			continue
+		for cur_file in files:
+			cur_ext = os.path.splitext(cur_file)[1]
+			if cur_ext in ext_list:
+				cur_file_path = os.path.join(cur_path, cur_file)
+				cur_file_path = cur_file_path.replace(os.path.sep, '/')
+				file_path_list.append(cur_file_path)
+	return file_path_list
+
+def listSubDirs(folder_path):
+	sub_dir_list = []
+	folder_path = textutil.convertTextToUtf8(folder_path)
+	for (cur_path, sub_dirs, files) in os.walk(folder_path):
+		if 'examples' in cur_path.lower():
+			continue
+		cur_path = cur_path.replace(os.path.sep, '/')
+		sub_dir_list.append(cur_path)
+	return sub_dir_list

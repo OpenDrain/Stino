@@ -22,6 +22,9 @@ def changeArduinoRoot(arduino_root):
 		globalvars.arduino_info.update()
 		const.settings.set('full_compilation', True)
 		globalvars.menu.update()
+		globalvars.command.update()
+		globalvars.syntax.update()
+		globalvars.completion.update()
 		# globalvars.status_info.update()
 		
 def changeSketchbookRoot(sketchbook_root):
@@ -34,6 +37,9 @@ def changeSketchbookRoot(sketchbook_root):
 	if sketchbook_root != pre_sketchbook_root:
 		globalvars.arduino_info.update()
 		globalvars.menu.update()
+		globalvars.command.update()
+		globalvars.syntax.update()
+		globalvars.completion.update()
 
 def updateSerialMenu():
 	globalvars.menu.update()

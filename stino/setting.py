@@ -81,18 +81,15 @@ class Setting:
 		else:
 			self.saveSettingFile()
 
-	def saveSettingFile(self):
-		if self.use_global_setting:
-			settings_dict = self.global_settings_dict
-			setting_file_path = self.global_setting_file_path
-		else:
-			settings_dict = self.settings_dict
-			setting_file_path = self.setting_file_path
-
+	def saveSettingsToFile(self, settings_dict, file_path):
 		settings_text = json.dumps(settings_dict, sort_keys = True, indent = 4)
-		opened_file = open(setting_file_path, 'w')
+		opened_file = open(file_path, 'w')
 		opened_file.write(settings_text)
 		opened_file.close()
+
+	def saveSettingFile(self):
+		self.saveSettingsToFile(self.global_settings_dict, self.global_setting_file_path)
+		self.saveSettingsToFile(self.settings_dict, self.setting_file_path)
 
 	def changeSettingFileFolder(self, setting_folder_path):
 		if os.path.isdir(setting_folder_path):

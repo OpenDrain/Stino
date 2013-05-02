@@ -17,12 +17,17 @@ def genCompletionText(arduino_info):
 	if platform:
 		platform_list.append(platform)
 
+	body_text = ''
 	for platform in platform_list:
 		all_keyword_list = arduino_info.getKeywordList(platform)
 		for keyword in all_keyword_list:
 			if arduino_info.getKeywordType(platform, keyword):
-				completions_text += '\t\t"%s",\n' % keyword
-	completions_text = completions_text[:-2] + '\n'
+				body_text += '\t\t"%s",\n' % keyword
+
+	if body_text:
+		body_text = body_text[:-2] + '\n'
+
+	completions_text += body_text
 	completions_text += '\t]\n'
 	completions_text += '}'
 	return completions_text

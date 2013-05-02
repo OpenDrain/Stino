@@ -195,3 +195,17 @@ def getRefList(keyword_list, arduino_info, platform):
 				ref_text += text
 	return (url_list, ref_text)
 
+def genInfoDictFromBlock(info_block):
+	info_key_list = []
+	info_dict = {}
+	name_line = info_block[0]
+	(name_key, name) = getKeyValue(name_line)
+	name_key = name_key.replace('.name', '.')
+	if name_key[-1] != '.':
+		name_key += '.'
+	for line in info_block[1:]:
+		(key, value) = getKeyValue(line)
+		key = key.replace(name_key, '')
+		info_key_list.append(key)
+		info_dict[key] = value
+	return (info_key_list, info_dict)

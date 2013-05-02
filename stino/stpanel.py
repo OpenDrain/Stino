@@ -22,29 +22,16 @@ class STPanel:
 		self.name = name
 		self.window = None
 		self.show_text = ''
-		self.initiatePanel()
-
-	def initiatePanel(self):
-		init_thread = threading.Thread(target=self.waitForWindowReady)
-		init_thread.start()
-
-	def getWindow(self):
-		self.window = sublime.active_window()
-
-	def setPanel(self):
-		self.panel = self.window.get_output_panel(self.name)
-
-	def waitForWindowReady(self):
-		ready = False
-		while not ready:
-			sublime.set_timeout(self.getWindow, 0)
-			if not (self.window is None):
-				ready = True
-			else:
-				time.sleep(0.5)
-		sublime.set_timeout(self.setPanel, 0)
+		self.panel = None
 
 	def addText(self, text, para_list = ()):
+		if self.panel is None:
+			window = sublime.active_window()
+			if window is None:
+				return
+			else:
+				self.panel = window.get_output_panel(self.name)
+				self.toggleWordWrap()
 		text = self.language.translate(text)
 
 		index = 0
