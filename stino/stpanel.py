@@ -40,6 +40,8 @@ class STPanel:
 			text = text.replace(org_text, para)
 			index += 1
 
+		text = text.replace('\r', '')
+
 		self.show_text += text
 		show_thread = threading.Thread(target=self.show)
 		show_thread.start()

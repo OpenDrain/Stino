@@ -131,10 +131,14 @@ def regulariseFuctionText(function_text):
 	return function_text
 
 def genSrcDeclarationList(simple_src_text):
+	src_declaration_list = []
 	pattern_text = r'^\s*?[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*?;)'
 	pattern = re.compile(pattern_text, re.M|re.S)
 	declaration_list = pattern.findall(simple_src_text)
-	src_declaration_list = [regulariseFuctionText(declaration) for declaration in declaration_list]
+	for declaration_text in declaration_list:
+		declaration = regulariseFuctionText(declaration_text)
+		if not ('if ' in declaration or 'else ' in declaration):
+			src_declaration_list.append(declaration)
 	return src_declaration_list
 
 def genSrcFunctionList(simple_src_text):
@@ -165,10 +169,17 @@ def genDeclarationList(ino_src_path_list):
 		src_declaration_list = genSrcDeclarationList(simple_src_text)
 		cur_declaration_list = removeExistDeclaration(src_function_list, src_declaration_list)
 		declaration_list += cur_declaration_list
+		print(src_path)
+		print('function')
+		print(src_function_list)
+		print('declaration')
+		print(src_declaration_list)
+		print('simple')
+		print(cur_declaration_list)
 	return declaration_list
 
 def findFirstFunction(src_text):
-	pattern_text = r'^\s*?[\w\[\]\*]+\s+[&\[\]\*\w\s]+\([&,\[\]\*\w\s]*\)(?=\s*?\{)|^\s*?class\s+?\w+?(?=\s*?\{)'
+	pattern_text = r'^\s*?class\s+?\w+?(?=\s*?\{)|^\s*?[\w\[\]\*]+?\s+?[&\[\]\*\w\s]+?\([&,\[\]\*\w\s]*\)(?=\s*?\{)'
 	pattern = re.compile(pattern_text, re.M|re.S)
 	match = pattern.search(src_text)
 	if match:
@@ -181,6 +192,8 @@ def findFirstFunction(src_text):
 
 def splitByFirstFunction(src_text):
 	(first_function, index) = findFirstFunction(src_text)
+	print(first_function)
+	print(index)
 	header_text = src_text[:index]
 	body_text = src_text[index:]
 	return (header_text, body_text)

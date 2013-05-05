@@ -298,8 +298,11 @@ class CompileSketchCommand(sublime_plugin.WindowCommand):
 		self.window.active_view().run_command('save')
 		filename = self.window.active_view().file_name()
 		cur_compilation = compilation.Compilation(globalvars.cur_language, globalvars.arduino_info, \
-			globalvars.menu, filename)
+			filename)
 		cur_compilation.start()
+		if not cur_compilation.isTerminatedWithError():
+			const.settings.set('full_compilation', False)
+			globalvars.command.update()
 
 	def is_enabled(self):
 		state = const.settings.get('show_arduino_menu', False)

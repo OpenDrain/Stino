@@ -64,8 +64,9 @@ def listSrcFile(folder_path, ext_list):
 	file_list = fileutil.listDir(folder_path, with_dirs = False)
 	for cur_file in file_list:
 		cur_file_ext = os.path.splitext(cur_file)[1]
-		if cur_file_ext in ext_list:
+		if cur_file_ext.lower() in ext_list:
 			cur_file_path = os.path.join(folder_path, cur_file)
+			cur_file_path = cur_file_path.replace(os.path.sep, '/')
 			path_list.append(cur_file_path)
 	return path_list
 
